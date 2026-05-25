@@ -1,8 +1,9 @@
 # Model-serving API for ProMatchPredict.
 # Built by CI and deployed to EC2 via docker compose (see infra/).
-# Python 3.11 (not newer) so scikit-learn 1.1.2 — the version the model was
-# pickled with — installs and unpickles cleanly.
-FROM python:3.11-slim
+# Python 3.10: scikit-learn 1.1.2 (the version the model was pickled with) ships
+# a cp310 manylinux wheel but NO cp311 wheel, so 3.10 is the newest base that
+# pip-installs 1.1.2 cleanly and unpickles the artifact without version warnings.
+FROM python:3.10-slim
 
 WORKDIR /app
 
