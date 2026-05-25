@@ -1,0 +1,19 @@
+# scikit-learn/numpy are pinned to MATCH the environment the model was pickled
+# in (cover_classifier.joblib was trained under scikit-learn 1.1.2 / numpy
+# 1.20.x on Python 3.8). sklearn does not guarantee cross-version unpickling, so
+# we reproduce the serving env to load the artifact safely and get identical
+# predictions. Revisit these pins only when the model is retrained.
+# 1.1.2 has Linux wheels (used in the Docker image) and unpickles the artifact
+# with ZERO version warnings. macOS arm64 has no 1.1.2 wheel — for local dev on a
+# Mac, install scikit-learn==1.1.3 instead (same 1.1.x minor; loads the model with
+# a benign version warning, identical RF predictions) or just use Docker.
+scikit-learn==1.1.2
+numpy==1.23.5
+scipy==1.9.3
+joblib==1.2.0
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+boto3==1.34.95
+s3fs==2024.6.1
