@@ -7,9 +7,15 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install deps first for layer caching.
+# Install deps first for layer caching, then strip weight we don't ship:
+# bundled test suites in numpy/scipy/sklearn, bytecode, and pip/setuptools.
 COPY api/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && find /usr/local/lib/python3.10/site-packages \
+        -type d \( -name tests -o -name test \) -prune -exec rm -rf {} + \
+    && find /usr/local/lib/python3.10/site-packages \
+        -name "*.pyc" -delete \
+    && pip uninstall -y pip setuptools wheel 2>/dev/null || true
 
 # App code + the feature manifest. The model.pkl is baked in at build time if
 # present, otherwise mounted/pulled from S3 at runtime via MODEL_PATH.

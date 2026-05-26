@@ -14,7 +14,10 @@ scipy==1.9.3
 joblib==1.2.0
 
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
+# Plain uvicorn (not [standard]) — the API sits behind nginx and doesn't need
+# uvloop/websockets/watchfiles/httptools (~19MB of extras).
+uvicorn==0.34.0
 pydantic==2.10.4
+# boto3 only — the API reads the model + track record from S3 directly. s3fs (and
+# its aiohttp/fsspec/aiobotocore deps) is a pipeline-only dependency, not needed here.
 boto3==1.34.95
-s3fs==2024.6.1
