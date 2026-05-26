@@ -1,0 +1,14 @@
+# Keep the model image small — only api/ is needed at runtime.
+**/__pycache__
+**/*.pyc
+.git
+.github
+Old Version/
+notebooks/
+web/
+*.ipynb
+*.csv
+!nfl_current_data.csv
+.venv
+.DS_Store
+ProMatchPredict Diagram.png

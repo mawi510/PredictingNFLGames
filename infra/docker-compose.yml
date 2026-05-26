@@ -1,0 +1,17 @@
+# Runs the model API on EC2. The deploy workflow pulls the freshly built image
+# and restarts this service. AWS creds + config come from a local .env file in
+# the same directory (see infra/README.md) — never commit that file.
+services:
+  api:
+    image: ghcr.io/mawi510/predictingnflgames-api:latest
+    container_name: nfl-api
+    restart: unless-stopped
+    # Bind to localhost only — nginx terminates TLS and proxies to it.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MODEL_S3_URI: s3://nfl.data/models/cover_classifier.joblib
+      ALLOWED_ORIGINS: "https://promatchpredict.com,https://www.promatchpredict.com"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: us-east-1
