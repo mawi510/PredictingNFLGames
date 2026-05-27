@@ -57,6 +57,16 @@ jobs:
           CURRENT_FEATURES_S3_URI: s3://nfl.data/current_features.json
         run: python -m pipeline.current_features
 
+      - name: Refresh team stat series
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Pull the rich historical metrics from S3 (the committed training CSV
+          # is a limited snapshot); current season comes from the refreshed file.
+          HISTORICAL_DATA_PATH: s3://nfl.data/nfl_historical_data.csv
+          TEAM_STATS_S3_URI: s3://nfl.data/team_stats.json
+        run: python -m pipeline.team_stats
+
       - name: Commit refreshed data snapshot
         run: |
           git config --global user.name 'github-actions[bot]'

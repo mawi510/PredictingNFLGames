@@ -54,6 +54,11 @@ CURRENT_FEATURES_S3_URI = os.getenv(
 )
 CURRENT_FEATURES_TTL = int(os.getenv("CURRENT_FEATURES_TTL", "600"))
 
+# Per-team weekly stat series (precomputed weekly by pipeline/team_stats.py).
+TEAM_STATS_PATH = os.getenv("TEAM_STATS_PATH", str(API_DIR / "team_stats.json"))
+TEAM_STATS_S3_URI = os.getenv("TEAM_STATS_S3_URI", "s3://nfl.data/team_stats.json")
+TEAM_STATS_TTL = int(os.getenv("TEAM_STATS_TTL", "3600"))
+
 # Allow the Vercel site (and local dev) to call the API from the browser.
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
@@ -358,4 +363,48 @@ def team_prediction(team: str) -> dict:
         "cover_probability": result.cover_probability,
         "model_version": result.model_version,
         "is_stub": result.is_stub,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Team stat series for the current-season + historical charts.
+# --------------------------------------------------------------------------- #
+_stats_cache: dict = {"data": None, "ts": 0.0}
+
+
+def load_team_stats() -> Optional[dict]:
+    import time
+
+    now = time.time()
+    if _stats_cache["data"] is not None and now - _stats_cache["ts"] < TEAM_STATS_TTL:
+        return _stats_cache["data"]
+
+    data = None
+    if TEAM_STATS_S3_URI:
+        try:
+            data = _read_json_from_s3(TEAM_STATS_S3_URI)
+        except Exception:
+            data = None
+    if data is None and Path(TEAM_STATS_PATH).exists():
+        with open(TEAM_STATS_PATH) as f:
+            data = json.load(f)
+    if data is not None:
+        _stats_cache.update(data=data, ts=now)
+    return data
+
+
+@app.get("/teams/{team}/stats")
+def team_stats(team: str) -> dict:
+    """Weekly stat series for a team across the current and past seasons."""
+    data = load_team_stats()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Team stats not available yet.")
+    entry = data["teams"].get(team.upper())
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"No stats for team '{team}'.")
+    return {
+        "team": team.upper(),
+        "metrics": data["metrics"],
+        "seasons": entry["seasons"],
+        "series": entry["series"],
     }

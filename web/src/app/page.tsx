@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PredictionPicker from "@/components/PredictionPicker";
+import TeamStats from "@/components/TeamStats";
 import { getStatus, type Status } from "@/lib/api";
 
 const FORCE_IN_SEASON =
@@ -78,6 +79,9 @@ export default function Home() {
           )}
         </>
       )}
+
+      {/* Team stats are useful year-round, in-season and off. */}
+      <TeamStats />
     </div>
   );
 }
