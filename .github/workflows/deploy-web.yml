@@ -31,7 +31,7 @@ jobs:
           NEXT_PUBLIC_API_BASE_URL: https://api.promatchpredict.com
           NEXT_PUBLIC_FORCE_IN_SEASON: "false"
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm run build   # next.config.ts has output: "export" -> web/out/
 
       - name: Ship to EC2 via rsync
