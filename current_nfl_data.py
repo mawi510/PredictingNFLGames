@@ -1047,9 +1047,10 @@ weekly_agg.to_csv(
         }
 )
 
-#We can also write this to our github folder
+#We can also write a local snapshot to the repo root (committed by CI).
+#Path is relative to the repo root, where this script runs.
 
-weekly_agg.to_csv('PredictingNFLGames/nfl_current_data.csv')
+weekly_agg.to_csv('nfl_current_data.csv')
 
 
 
