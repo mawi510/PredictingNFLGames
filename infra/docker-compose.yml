@@ -11,7 +11,8 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       MODEL_S3_URI: s3://nfl.data/models/cover_classifier.joblib
-      ALLOWED_ORIGINS: "https://promatchpredict.com,https://www.promatchpredict.com"
+      # localhost:3000 lets the Next.js dev server hit the live API for local testing.
+      ALLOWED_ORIGINS: "https://promatchpredict.com,https://www.promatchpredict.com,http://localhost:3000"
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: us-east-1

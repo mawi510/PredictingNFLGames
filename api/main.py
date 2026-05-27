@@ -7,6 +7,7 @@ inference.
 
 Endpoints:
     GET  /health        -> liveness + whether a real model is loaded
+    GET  /status        -> season awareness (in-season? week? predictions ready?)
     GET  /track-record  -> season win/loss backtest (precomputed weekly)
     POST /predict        -> cover probability for one team-week
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -133,6 +135,62 @@ def health() -> dict:
         "model_loaded": load_model() is not None,
         "feature_manifest_version": manifest["version"],
         "n_features": manifest["n_features"],
+    }
+
+
+# Model needs ~3 weeks of history before it predicts (matches the old app's
+# "come back for week 4" rule).
+MIN_WEEK_FOR_PREDICTIONS = 3
+
+
+def _in_season(now: Optional[datetime] = None) -> bool:
+    """True during the NFL regular season window (Sept through early Jan)."""
+    now = now or datetime.now(timezone.utc)
+    return now.month in (9, 10, 11, 12, 1)
+
+
+@app.get("/status")
+def status() -> dict:
+    """Season awareness so the site can adjust its copy.
+
+    Tells the frontend whether it's NFL season, the latest season/week we have
+    data for, and whether predictions are available yet (the model needs a few
+    weeks of data). Single source of truth so the UI doesn't guess from the date.
+    """
+    in_season = _in_season()
+    season = latest_week = None
+    try:
+        tr = track_record()  # cached; carries season + latest_week
+        season = tr.get("season")
+        latest_week = tr.get("latest_week")
+    except HTTPException:
+        pass
+
+    has_data = (latest_week or 0) >= MIN_WEEK_FOR_PREDICTIONS
+    predictions_available = bool(in_season and has_data)
+
+    if not in_season:
+        reason, message = (
+            "off_season",
+            "The NFL season isn't underway right now. Check back in September for "
+            "weekly spread predictions — here's how the model did last season.",
+        )
+    elif not has_data:
+        reason, message = (
+            "insufficient_data",
+            f"The model needs {MIN_WEEK_FOR_PREDICTIONS} weeks of data before it can "
+            "predict. Come back right before Week 4.",
+        )
+    else:
+        reason, message = "ok", f"Week {latest_week} predictions are live."
+
+    return {
+        "in_season": in_season,
+        "season": season,
+        "latest_week": latest_week,
+        "predictions_available": predictions_available,
+        "reason": reason,
+        "message": message,
     }
 
 
