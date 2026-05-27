@@ -90,6 +90,7 @@ def build_track_record() -> dict:
     model = load_model()
 
     latest_season = int(df["season"].max())
+    latest_week = int(df[df["season"] == latest_season]["week"].max())
     season = df[(df["season"] == latest_season) & (df["week"] >= MIN_WEEK)].copy()
     season = season.sort_values(["week", "team"]).reset_index(drop=True)
 
@@ -128,6 +129,7 @@ def build_track_record() -> dict:
 
     return {
         "season": latest_season,
+        "latest_week": latest_week,
         "generated_at": pd.Timestamp.now("UTC").isoformat(),
         "is_stub": model is None,
         "model_version": manifest["version"],

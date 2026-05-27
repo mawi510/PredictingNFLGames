@@ -7,6 +7,7 @@ inference.
 
 Endpoints:
     GET  /health        -> liveness + whether a real model is loaded
+    GET  /status        -> season awareness (in-season? week? predictions ready?)
     GET  /track-record  -> season win/loss backtest (precomputed weekly)
     POST /predict        -> cover probability for one team-week
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -42,6 +44,20 @@ TRACK_RECORD_S3_URI = os.getenv(
 )
 # Seconds to cache the S3 track record in memory (it only changes weekly).
 TRACK_RECORD_TTL = int(os.getenv("TRACK_RECORD_TTL", "600"))
+
+# Per-team current-week features (precomputed weekly by pipeline/current_features.py).
+CURRENT_FEATURES_PATH = os.getenv(
+    "CURRENT_FEATURES_PATH", str(API_DIR / "current_features.json")
+)
+CURRENT_FEATURES_S3_URI = os.getenv(
+    "CURRENT_FEATURES_S3_URI", "s3://nfl.data/current_features.json"
+)
+CURRENT_FEATURES_TTL = int(os.getenv("CURRENT_FEATURES_TTL", "600"))
+
+# Per-team weekly stat series (precomputed weekly by pipeline/team_stats.py).
+TEAM_STATS_PATH = os.getenv("TEAM_STATS_PATH", str(API_DIR / "team_stats.json"))
+TEAM_STATS_S3_URI = os.getenv("TEAM_STATS_S3_URI", "s3://nfl.data/team_stats.json")
+TEAM_STATS_TTL = int(os.getenv("TEAM_STATS_TTL", "3600"))
 
 # Allow the Vercel site (and local dev) to call the API from the browser.
 ALLOWED_ORIGINS = os.getenv(
@@ -136,6 +152,62 @@ def health() -> dict:
     }
 
 
+# Model needs ~3 weeks of history before it predicts (matches the old app's
+# "come back for week 4" rule).
+MIN_WEEK_FOR_PREDICTIONS = 3
+
+
+def _in_season(now: Optional[datetime] = None) -> bool:
+    """True during the NFL regular season window (Sept through early Jan)."""
+    now = now or datetime.now(timezone.utc)
+    return now.month in (9, 10, 11, 12, 1)
+
+
+@app.get("/status")
+def status() -> dict:
+    """Season awareness so the site can adjust its copy.
+
+    Tells the frontend whether it's NFL season, the latest season/week we have
+    data for, and whether predictions are available yet (the model needs a few
+    weeks of data). Single source of truth so the UI doesn't guess from the date.
+    """
+    in_season = _in_season()
+    season = latest_week = None
+    try:
+        tr = track_record()  # cached; carries season + latest_week
+        season = tr.get("season")
+        latest_week = tr.get("latest_week")
+    except HTTPException:
+        pass
+
+    has_data = (latest_week or 0) >= MIN_WEEK_FOR_PREDICTIONS
+    predictions_available = bool(in_season and has_data)
+
+    if not in_season:
+        reason, message = (
+            "off_season",
+            "The NFL season isn't underway right now. Check back in September for "
+            "weekly spread predictions — here's how the model did last season.",
+        )
+    elif not has_data:
+        reason, message = (
+            "insufficient_data",
+            f"The model needs {MIN_WEEK_FOR_PREDICTIONS} weeks of data before it can "
+            "predict. Come back right before Week 4.",
+        )
+    else:
+        reason, message = "ok", f"Week {latest_week} predictions are live."
+
+    return {
+        "in_season": in_season,
+        "season": season,
+        "latest_week": latest_week,
+        "predictions_available": predictions_available,
+        "reason": reason,
+        "message": message,
+    }
+
+
 _track_cache: dict = {"data": None, "ts": 0.0}
 
 
@@ -220,3 +292,119 @@ def predict(req: PredictRequest) -> PredictResponse:
         model_version=manifest["version"],
         is_stub=False,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Team-driven prediction: the frontend asks for a team, the API does the
+# feature lookup (from the precomputed current_features.json) and predicts.
+# --------------------------------------------------------------------------- #
+_features_cache: dict = {"data": None, "ts": 0.0}
+
+
+def load_current_features() -> Optional[dict]:
+    import time
+
+    now = time.time()
+    if (
+        _features_cache["data"] is not None
+        and now - _features_cache["ts"] < CURRENT_FEATURES_TTL
+    ):
+        return _features_cache["data"]
+
+    data = None
+    if CURRENT_FEATURES_S3_URI:
+        try:
+            data = _read_json_from_s3(CURRENT_FEATURES_S3_URI)
+        except Exception:
+            data = None
+    if data is None and Path(CURRENT_FEATURES_PATH).exists():
+        with open(CURRENT_FEATURES_PATH) as f:
+            data = json.load(f)
+    if data is not None:
+        _features_cache.update(data=data, ts=now)
+    return data
+
+
+@app.get("/teams")
+def teams() -> dict:
+    """List teams with display info for the picker (no prediction yet)."""
+    data = load_current_features()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Current features not available yet.")
+    items = [
+        {
+            "team": t,
+            "week": info["week"],
+            "spread": info["spread"],
+            "cover_record": info["cover_record"],
+        }
+        for t, info in sorted(data["teams"].items())
+    ]
+    return {"season": data["season"], "latest_week": data["latest_week"], "teams": items}
+
+
+@app.get("/teams/{team}/prediction")
+def team_prediction(team: str) -> dict:
+    """Predict cover probability for one team's current week."""
+    data = load_current_features()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Current features not available yet.")
+    info = data["teams"].get(team.upper())
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"Unknown team '{team}'.")
+
+    result = predict(PredictRequest(team=team.upper(), features=info["features"]))
+    return {
+        "team": team.upper(),
+        "season": data["season"],
+        "week": info["week"],
+        "spread": info["spread"],
+        "cover_record": info["cover_record"],
+        "cover_probability": result.cover_probability,
+        "model_version": result.model_version,
+        "is_stub": result.is_stub,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Team stat series for the current-season + historical charts.
+# --------------------------------------------------------------------------- #
+_stats_cache: dict = {"data": None, "ts": 0.0}
+
+
+def load_team_stats() -> Optional[dict]:
+    import time
+
+    now = time.time()
+    if _stats_cache["data"] is not None and now - _stats_cache["ts"] < TEAM_STATS_TTL:
+        return _stats_cache["data"]
+
+    data = None
+    if TEAM_STATS_S3_URI:
+        try:
+            data = _read_json_from_s3(TEAM_STATS_S3_URI)
+        except Exception:
+            data = None
+    if data is None and Path(TEAM_STATS_PATH).exists():
+        with open(TEAM_STATS_PATH) as f:
+            data = json.load(f)
+    if data is not None:
+        _stats_cache.update(data=data, ts=now)
+    return data
+
+
+@app.get("/teams/{team}/stats")
+def team_stats(team: str) -> dict:
+    """Weekly stat series for a team across the current and past seasons."""
+    data = load_team_stats()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Team stats not available yet.")
+    entry = data["teams"].get(team.upper())
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"No stats for team '{team}'.")
+    return {
+        "team": team.upper(),
+        "metrics": data["metrics"],
+        "seasons": entry["seasons"],
+        "series": entry["series"],
+    }
