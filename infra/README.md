@@ -1,11 +1,31 @@
 # Infrastructure & Deployment
 
-The model API runs as a Docker container on EC2, behind nginx with a Let's
-Encrypt cert, at `https://api.promatchpredict.com`. CI builds the image, pushes
-it to GHCR, and restarts the container over SSH on every merge to `main`.
+Two things run on the one EC2 box, both behind nginx + Let's Encrypt:
+- **Model API** — Docker container at `https://api.promatchpredict.com`. CI builds
+  the image, pushes to GHCR, restarts the container over SSH on merge to `main`.
+- **Frontend** — static site at `https://promatchpredict.com`. CI builds the Next
+  export and rsyncs it to `/var/www/promatchpredict` on merge to `main`.
 
 ```
-GitHub merge -> build image -> push GHCR -> SSH to EC2 -> docker compose pull && up -d
+api:  merge -> build image -> push GHCR -> SSH -> docker compose pull && up -d
+web:  merge -> next build (export) -> rsync out/ -> /var/www/promatchpredict
+```
+
+## One-time EC2 setup for the frontend
+
+```bash
+# Web root the deploy rsyncs into (owned by the SSH user so no sudo in CI).
+sudo mkdir -p /var/www/promatchpredict
+sudo chown ec2-user:ec2-user /var/www/promatchpredict
+
+# nginx vhost for the apex + www. REMOVE any old Streamlit proxy config for this
+# domain first (it's what's currently returning 502).
+sudo cp infra/nginx-web.conf /etc/nginx/conf.d/promatchpredict.com.conf
+sudo nginx -t && sudo systemctl reload nginx
+
+# DNS: A records for promatchpredict.com AND www.promatchpredict.com -> Elastic IP.
+# Then issue the cert (after DNS resolves):
+sudo certbot --nginx -d promatchpredict.com -d www.promatchpredict.com
 ```
 
 ## Required GitHub Actions secrets

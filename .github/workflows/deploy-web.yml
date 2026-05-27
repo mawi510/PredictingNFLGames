@@ -1,0 +1,47 @@
+name: Deploy Web
+
+# Builds the static site and ships it to EC2, served by nginx at
+# promatchpredict.com. Runs on merge to main when the frontend changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build static export
+        working-directory: web
+        env:
+          # Baked into the static bundle (NEXT_PUBLIC_* are public by design).
+          NEXT_PUBLIC_API_BASE_URL: https://api.promatchpredict.com
+          NEXT_PUBLIC_FORCE_IN_SEASON: "false"
+        run: |
+          npm ci
+          npm run build   # next.config.ts has output: "export" -> web/out/
+
+      - name: Ship to EC2 via rsync
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          install -m 600 /dev/stdin ~/deploy_key <<< "$EC2_SSH_KEY"
+          rsync -az --delete \
+            -e "ssh -i ~/deploy_key -o StrictHostKeyChecking=accept-new" \
+            web/out/ "$EC2_USER@$EC2_HOST:/var/www/promatchpredict/"
+          rm -f ~/deploy_key
