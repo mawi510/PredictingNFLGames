@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Clean, modern sports-data theme: dark neutral base with a green accent. */
+:root {
+  --background: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #1b1f26;
+  --border: #262b33;
+  --foreground: #e8eaed;
+  --muted: #9aa3af;
+  --accent: #22c55e;
+  --accent-weak: #14331f;
+  --danger: #f87171;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-weak: var(--accent-weak);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}

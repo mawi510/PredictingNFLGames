@@ -45,6 +45,15 @@ TRACK_RECORD_S3_URI = os.getenv(
 # Seconds to cache the S3 track record in memory (it only changes weekly).
 TRACK_RECORD_TTL = int(os.getenv("TRACK_RECORD_TTL", "600"))
 
+# Per-team current-week features (precomputed weekly by pipeline/current_features.py).
+CURRENT_FEATURES_PATH = os.getenv(
+    "CURRENT_FEATURES_PATH", str(API_DIR / "current_features.json")
+)
+CURRENT_FEATURES_S3_URI = os.getenv(
+    "CURRENT_FEATURES_S3_URI", "s3://nfl.data/current_features.json"
+)
+CURRENT_FEATURES_TTL = int(os.getenv("CURRENT_FEATURES_TTL", "600"))
+
 # Allow the Vercel site (and local dev) to call the API from the browser.
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
@@ -278,3 +287,75 @@ def predict(req: PredictRequest) -> PredictResponse:
         model_version=manifest["version"],
         is_stub=False,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Team-driven prediction: the frontend asks for a team, the API does the
+# feature lookup (from the precomputed current_features.json) and predicts.
+# --------------------------------------------------------------------------- #
+_features_cache: dict = {"data": None, "ts": 0.0}
+
+
+def load_current_features() -> Optional[dict]:
+    import time
+
+    now = time.time()
+    if (
+        _features_cache["data"] is not None
+        and now - _features_cache["ts"] < CURRENT_FEATURES_TTL
+    ):
+        return _features_cache["data"]
+
+    data = None
+    if CURRENT_FEATURES_S3_URI:
+        try:
+            data = _read_json_from_s3(CURRENT_FEATURES_S3_URI)
+        except Exception:
+            data = None
+    if data is None and Path(CURRENT_FEATURES_PATH).exists():
+        with open(CURRENT_FEATURES_PATH) as f:
+            data = json.load(f)
+    if data is not None:
+        _features_cache.update(data=data, ts=now)
+    return data
+
+
+@app.get("/teams")
+def teams() -> dict:
+    """List teams with display info for the picker (no prediction yet)."""
+    data = load_current_features()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Current features not available yet.")
+    items = [
+        {
+            "team": t,
+            "week": info["week"],
+            "spread": info["spread"],
+            "cover_record": info["cover_record"],
+        }
+        for t, info in sorted(data["teams"].items())
+    ]
+    return {"season": data["season"], "latest_week": data["latest_week"], "teams": items}
+
+
+@app.get("/teams/{team}/prediction")
+def team_prediction(team: str) -> dict:
+    """Predict cover probability for one team's current week."""
+    data = load_current_features()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Current features not available yet.")
+    info = data["teams"].get(team.upper())
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"Unknown team '{team}'.")
+
+    result = predict(PredictRequest(team=team.upper(), features=info["features"]))
+    return {
+        "team": team.upper(),
+        "season": data["season"],
+        "week": info["week"],
+        "spread": info["spread"],
+        "cover_record": info["cover_record"],
+        "cover_probability": result.cover_probability,
+        "model_version": result.model_version,
+        "is_stub": result.is_stub,
+    }
