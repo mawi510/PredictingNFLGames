@@ -37,7 +37,11 @@ jobs:
             numpy==1.23.5 scipy==1.9.3 scikit-learn==1.1.2 joblib==1.2.0 \
             "pandas>=1.5,<2.1" requests s3fs boto3 nfl_data_py
 
+      # nfl_data_py's source URLs can 404 for a not-yet-published season; don't let
+      # a failed fresh pull block the rest — downstream steps then run against the
+      # committed CSV snapshot. (Revisit with the model/data rework.)
       - name: Refresh current-season data
+        continue-on-error: true
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
