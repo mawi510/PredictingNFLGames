@@ -33,15 +33,17 @@ CURRENT_PATH = os.getenv("DATA_PATH", str(ROOT / "nfl_current_data.csv"))
 OUTPUT_PATH = os.getenv("TEAM_STATS_PATH", str(ROOT / "api" / "team_stats.json"))
 OUTPUT_S3_URI = os.getenv("TEAM_STATS_S3_URI", "")
 
-# Logical metric key -> display label, in display order.
+# Curated popular metrics (mirrors the old Streamlit list) -> display label,
+# in display order. Not the full 900+ model features — just the ones fans read.
 METRICS = {
     "points_scored": "Points Scored",
     "points_allowed": "Points Allowed",
-    "scoring_margin": "Scoring Margin",
     "passing_yards": "Passing Yards",
     "passing_tds": "Passing TDs",
     "rushing_yards": "Rushing Yards",
     "rushing_tds": "Rushing TDs",
+    "scoring_margin": "Scoring Margin",
+    "scoring_margin_allowed": "Scoring Margin Allowed",
     "interceptions": "Interceptions",
 }
 

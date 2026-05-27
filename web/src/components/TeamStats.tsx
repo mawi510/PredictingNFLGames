@@ -10,37 +10,26 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { getTeams, getTeamStats, type TeamStats as Stats } from "@/lib/api";
-import { teamName } from "@/lib/teams";
+import { getTeamStats, type TeamStats as Stats } from "@/lib/api";
 
-export default function TeamStats() {
-  const [teams, setTeams] = useState<string[]>([]);
-  const [team, setTeam] = useState("");
+export default function TeamStats({ team }: { team: string }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [season, setSeason] = useState("");
   const [metric, setMetric] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getTeams()
-      .then((res) => setTeams(res.teams.map((t) => t.team)))
-      .catch(() => setError("Couldn't load teams."));
-  }, []);
-
-  async function onTeam(value: string) {
-    setTeam(value);
     setStats(null);
     setError(null);
-    if (!value) return;
-    try {
-      const s = await getTeamStats(value);
-      setStats(s);
-      setSeason(String(s.seasons[0] ?? ""));
-      setMetric(s.metrics[0]?.key ?? "");
-    } catch {
-      setError(`Couldn't load stats for ${value}.`);
-    }
-  }
+    if (!team) return;
+    getTeamStats(team)
+      .then((s) => {
+        setStats(s);
+        setSeason(String(s.seasons[0] ?? ""));
+        setMetric(s.metrics[0]?.key ?? "");
+      })
+      .catch(() => setError(`Couldn't load stats for ${team}.`));
+  }, [team]);
 
   // Metrics that actually have data for the chosen season.
   const availableMetrics = useMemo(() => {
@@ -75,16 +64,7 @@ export default function TeamStats() {
       </p>
 
       <div className="rounded-xl border border-border bg-surface p-6">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Select label="Team" value={team} onChange={onTeam}>
-            <option value="">Choose a team…</option>
-            {teams.map((t) => (
-              <option key={t} value={t}>
-                {teamName(t)}
-              </option>
-            ))}
-          </Select>
-
+        <div className="grid gap-4 sm:grid-cols-2">
           <Select
             label="Season"
             value={season}
@@ -153,7 +133,9 @@ export default function TeamStats() {
 
         {!stats && !error && (
           <p className="mt-6 text-sm text-muted">
-            Select a team to see their weekly trends.
+            {team
+              ? "Loading trends…"
+              : "Select a team above to see their weekly trends."}
           </p>
         )}
       </div>
