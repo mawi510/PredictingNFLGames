@@ -24,13 +24,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          # 3.10 so scikit-learn 1.1.2 (the backtest model's version) installs from
+          # a wheel; newer Python has no 1.1.2 wheel and falls back to a failing build.
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy requests s3fs boto3 nfl_data_py
-          pip install -r api/requirements.txt
+          # One coherent, pinned set: sklearn 1.1.2 needs numpy 1.23; pandas <2.1
+          # keeps nfl_data_py + numpy 1.23 happy.
+          pip install \
+            numpy==1.23.5 scipy==1.9.3 scikit-learn==1.1.2 joblib==1.2.0 \
+            "pandas>=1.5,<2.1" requests s3fs boto3 nfl_data_py
 
       - name: Refresh current-season data
         env:
