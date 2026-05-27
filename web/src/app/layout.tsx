@@ -34,7 +34,6 @@ export default function RootLayout({
             <span className="font-semibold tracking-tight">
               ProMatch<span className="text-accent">Predict</span>
             </span>
-            <span className="text-xs text-muted">NFL spread model</span>
           </div>
         </header>
         <main className="flex-1">{children}</main>

@@ -25,10 +25,6 @@ export default function Home() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Will they cover the spread?
         </h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          A random-forest model trained on NFL performance and betting data
-          estimates each team&apos;s chance of covering the spread this week.
-        </p>
       </section>
 
       {failed && (

@@ -7,6 +7,7 @@ import {
   type Prediction,
   type TeamInfo,
 } from "@/lib/api";
+import { teamLogo, teamName } from "@/lib/teams";
 
 function formatSpread(spread: number): string {
   return spread > 0 ? `+${spread}` : `${spread}`;
@@ -75,15 +76,28 @@ export default function PredictionPicker() {
 function PredictionCard({ prediction }: { prediction: Prediction }) {
   const pct = Math.round(prediction.cover_probability * 100);
   const leans = pct >= 50;
+  const logo = teamLogo(prediction.team);
   return (
     <div className="rounded-xl border border-border bg-surface p-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">
-          {prediction.team}{" "}
-          <span className="text-sm font-normal text-muted">
-            · Week {prediction.week}, {prediction.season}
-          </span>
-        </h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logo}
+              alt={`${teamName(prediction.team)} logo`}
+              width={44}
+              height={44}
+              className="h-11 w-11 object-contain"
+            />
+          )}
+          <h2 className="text-lg font-semibold">
+            {teamName(prediction.team)}{" "}
+            <span className="block text-sm font-normal text-muted">
+              Week {prediction.week}, {prediction.season}
+            </span>
+          </h2>
+        </div>
         <span className="text-sm text-muted">
           spread {formatSpread(prediction.spread)}
         </span>
@@ -99,21 +113,12 @@ function PredictionCard({ prediction }: { prediction: Prediction }) {
         <span className="pb-1 text-sm text-muted">chance to cover the spread</span>
       </div>
 
-      <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-surface-2">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${pct}%`,
-            background: leans ? "var(--accent)" : "var(--danger)",
-          }}
-        />
-      </div>
-
       <p className="mt-5 text-sm text-muted">
         The model {leans ? "leans toward" : "leans against"}{" "}
-        <span className="text-foreground">{prediction.team}</span> covering at a
-        spread of {formatSpread(prediction.spread)}. This season they&apos;ve
-        covered {Math.round(prediction.cover_record * 100)}% of the time.
+        <span className="text-foreground">{teamName(prediction.team)}</span>{" "}
+        covering at a spread of {formatSpread(prediction.spread)}. This season
+        they&apos;ve covered {Math.round(prediction.cover_record * 100)}% of the
+        time.
       </p>
 
       {prediction.is_stub && (
