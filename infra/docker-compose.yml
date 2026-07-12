@@ -10,7 +10,9 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      MODEL_S3_URI: s3://nfl.data/models/cover_classifier.joblib
+      # Model bundle is baked into the image (api/model_margin_v2.pkl) — the
+      # old MODEL_S3_URI boot-pull is gone. AWS creds are still needed for the
+      # S3-read endpoints (track record, current features, team stats).
       # localhost:3000 lets the Next.js dev server hit the live API for local testing.
       ALLOWED_ORIGINS: "https://promatchpredict.com,https://www.promatchpredict.com,http://localhost:3000"
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}

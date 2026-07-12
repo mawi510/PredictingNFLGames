@@ -1,13 +1,17 @@
 """Precompute per-team current-week features for the prediction API.
 
-The model needs a team's full 986-feature vector to predict, but the frontend
-(and the slim API image, which has no pandas) shouldn't load the wide CSV. So
-this job — run weekly alongside the backtest — distills the latest week of data
-into a small JSON the API can read directly: for each team, its ordered feature
-values plus a few display fields (spread, week, cover record).
+The margin model (v2) needs a team's 44-feature vector plus the market spread
+to predict, but the slim API image has no pandas and shouldn't load the wide
+CSV. So this job — run weekly alongside the backtest — distills the latest
+week of data into a small JSON the API reads directly: for each team, its
+named feature values (null where unavailable; the model handles missing
+natively) plus a few display fields (spread, week, cover record).
 
-Writes current_features.json locally and, if TRACK_RECORD_S3_URI's bucket is
-configured via CURRENT_FEATURES_S3_URI, uploads it to S3.
+Two model features are opponent-relative and not CSV columns; they're built
+here via pipeline.margin_model.attach_matchup_features().
+
+Writes current_features.json locally and, if CURRENT_FEATURES_S3_URI is set,
+uploads it to S3.
 
 Usage:
     python -m pipeline.current_features
@@ -21,8 +25,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from pipeline.margin_model import attach_matchup_features
+
 ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_PATH = ROOT / "api" / "feature_manifest.json"
+MANIFEST_PATH = ROOT / "api" / "feature_manifest_margin_v2.json"
 DATA_PATH = os.getenv("DATA_PATH", str(ROOT / "nfl_current_data.csv"))
 OUTPUT_PATH = os.getenv("CURRENT_FEATURES_PATH", str(ROOT / "api" / "current_features.json"))
 OUTPUT_S3_URI = os.getenv("CURRENT_FEATURES_S3_URI", "")
@@ -51,6 +57,7 @@ def build() -> dict:
     latest_season = int(df["season"].max())
     latest_week = int(df[df["season"] == latest_season]["week"].max())
     season = df[df["season"] == latest_season]
+    season = attach_matchup_features(season)
 
     teams = {}
     for team, grp in season.groupby("team"):
@@ -59,13 +66,14 @@ def build() -> dict:
             "week": int(row["week"]),
             "spread": _num(row.get("spread")),
             "cover_record": _num(row.get(COVER_RECORD_COL)),
-            # Ordered feature values, missing -> 0.0 (matches the old fillna(0)).
-            "features": {f: _num(row.get(f)) for f in features},
+            # Ordered feature values; unavailable -> null (model is NaN-native).
+            "features": {f: _num_or_none(row.get(f)) for f in features},
         }
 
     return {
         "season": latest_season,
         "latest_week": latest_week,
+        "model_version": manifest["version"],
         "generated_at": pd.Timestamp.now("UTC").isoformat(),
         "teams": teams,
     }
@@ -76,6 +84,13 @@ def _num(v) -> float:
         return float(v) if pd.notna(v) else 0.0
     except (TypeError, ValueError):
         return 0.0
+
+
+def _num_or_none(v):
+    try:
+        return float(v) if pd.notna(v) else None
+    except (TypeError, ValueError):
+        return None
 
 
 def main() -> None:

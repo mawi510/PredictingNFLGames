@@ -1,8 +1,7 @@
 # Model-serving API for ProMatchPredict.
 # Built by CI and deployed to EC2 via docker compose (see infra/).
-# Python 3.10: scikit-learn 1.1.2 (the version the model was pickled with) ships
-# a cp310 manylinux wheel but NO cp311 wheel, so 3.10 is the newest base that
-# pip-installs 1.1.2 cleanly and unpickles the artifact without version warnings.
+# Python 3.10: matches the weekly-data job's pinned stack (numpy 1.23.5 has no
+# constraint newer than cp310 here); xgboost 2.1.3 ships a cp310 wheel.
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -17,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
         -name "*.pyc" -delete \
     && pip uninstall -y pip setuptools wheel 2>/dev/null || true
 
-# App code + the feature manifest. The model.pkl is baked in at build time if
-# present, otherwise mounted/pulled from S3 at runtime via MODEL_PATH.
+# App code + feature manifest + the committed margin-v2 model bundle (small
+# enough to live in the repo — no S3 pull at boot).
 COPY api/ ./api/
 
 EXPOSE 8000
