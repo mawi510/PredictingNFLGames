@@ -1,15 +1,21 @@
 """FastAPI service for the NFL spread-cover model.
 
-Serves live predictions from the trained RandomForest. Replaces the old Flask
-app that took a fragile positional list; this version validates inputs against a
-versioned feature manifest so a pipeline column change can't silently corrupt
-inference.
+Serves live predictions from the margin model (v2): an XGBoost regressor
+predicts the expected scoring margin from 44 team-form features (no market
+inputs), and the cover probability is computed at the market spread via a
+Student-t CDF calibrated on out-of-sample residuals:
+
+    P(cover) = t.cdf((predicted_margin + spread) / scale_t, df=nu_t)
+
+Inputs are validated against a versioned feature manifest so a pipeline column
+change can't silently corrupt inference. Missing features stay NaN — the
+model handles them natively (do not fill with 0).
 
 Endpoints:
     GET  /health        -> liveness + whether a real model is loaded
     GET  /status        -> season awareness (in-season? week? predictions ready?)
     GET  /track-record  -> season win/loss backtest (precomputed weekly)
-    POST /predict        -> cover probability for one team-week
+    POST /predict        -> margin + cover probability for one team-week
 
 Run locally:
     uvicorn api.main:app --reload --port 8000
@@ -30,12 +36,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 API_DIR = Path(__file__).resolve().parent
-MANIFEST_PATH = API_DIR / "feature_manifest.json"
-# Model is loaded from a local path if present, else pulled from S3 at boot.
-MODEL_PATH = os.getenv("MODEL_PATH", str(API_DIR / "model.pkl"))
-# If the artifact isn't on disk, pull it from S3 at boot (where it's versioned
-# alongside the data). e.g. s3://nfl.data/models/cover_classifier.joblib
-MODEL_S3_URI = os.getenv("MODEL_S3_URI", "")
+MANIFEST_PATH = API_DIR / "feature_manifest_margin_v2.json"
+# The model bundle is committed to the repo and baked into the image; no S3
+# pull needed at boot (unlike the old RF, which was too big to commit).
+MODEL_PATH = os.getenv("MODEL_PATH", str(API_DIR / "model_margin_v2.pkl"))
 TRACK_RECORD_PATH = os.getenv("TRACK_RECORD_PATH", str(API_DIR / "track_record.json"))
 # The weekly job writes the backtest here; the API reads it live (cached) so a
 # data refresh never requires an image rebuild/redeploy.
@@ -77,47 +81,38 @@ def load_manifest() -> dict:
 
 @lru_cache(maxsize=1)
 def load_model():
-    """Load the trained model, or return None so the API still boots for dev.
+    """Load the model bundle, or return None so the API still boots for dev.
 
-    When None, /predict returns a clearly-labelled stub probability so the
-    frontend and CI can be built before the real artifact is recovered from EC2.
+    The bundle is a dict: {regressor (XGBRegressor), feature_names, scale_t,
+    nu_t, version, ...} written by pipeline/train_margin.py. When None,
+    /predict returns a clearly-labelled stub so the frontend and CI still work.
     """
     path = Path(MODEL_PATH)
-    if not path.exists() and MODEL_S3_URI:
-        _download_from_s3(MODEL_S3_URI, path)
     if not path.exists():
         return None
-    import joblib  # imported lazily so the stub path needs no sklearn
+    import joblib  # imported lazily so the stub path needs no ML deps
 
     return joblib.load(path)
-
-
-def _download_from_s3(uri: str, dest: Path) -> None:
-    """Download s3://bucket/key -> dest, using the same env creds as the pipeline."""
-    import boto3
-
-    bucket, _, key = uri.removeprefix("s3://").partition("/")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    boto3.client(
-        "s3",
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    ).download_file(bucket, key, str(dest))
 
 
 # --------------------------------------------------------------------------- #
 # Request / response schemas
 # --------------------------------------------------------------------------- #
 class PredictRequest(BaseModel):
-    """Named feature map for a single team-week.
+    """Named feature map + market spread for a single team-week.
 
-    Keys must match the manifest's feature names. Missing features default to
-    0.0 (the old app did `fillna(0)`); unknown keys are rejected so typos and
-    stale pipelines surface loudly instead of silently shifting the vector.
+    Keys must match the manifest's feature names. Missing or null features
+    stay NaN (the model handles them natively); unknown keys are rejected so
+    typos and stale pipelines surface loudly instead of silently shifting the
+    vector. The spread is NOT a model feature — it enters only in the final
+    cover-probability calculation.
     """
 
-    features: dict[str, float] = Field(
+    features: dict[str, Optional[float]] = Field(
         ..., description="Mapping of feature name -> value for one team-week."
+    )
+    spread: float = Field(
+        ..., description="Market spread for this team (negative = favored)."
     )
     team: Optional[str] = Field(None, description="Team abbreviation, for logging/UI.")
 
@@ -125,6 +120,8 @@ class PredictRequest(BaseModel):
 class PredictResponse(BaseModel):
     team: Optional[str]
     cover_probability: float
+    predicted_margin: float
+    edge_pts: float
     model_version: str
     is_stub: bool = False
 
@@ -144,9 +141,11 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict:
     manifest = load_manifest()
+    bundle = load_model()
     return {
         "status": "ok",
-        "model_loaded": load_model() is not None,
+        "model_loaded": bundle is not None,
+        "model_version": bundle["version"] if bundle else None,
         "feature_manifest_version": manifest["version"],
         "n_features": manifest["n_features"],
     }
@@ -269,27 +268,40 @@ def predict(req: PredictRequest) -> PredictResponse:
             f"{unknown[:10]}{'...' if len(unknown) > 10 else ''}",
         )
 
-    # Build the vector in the manifest's exact order; default missing to 0.0.
-    vector = np.array(
-        [[float(req.features.get(name, 0.0)) for name in expected]], dtype=float
-    )
+    # Build the vector in the manifest's exact order; missing/null -> NaN.
+    def _val(name: str) -> float:
+        v = req.features.get(name)
+        return float(v) if v is not None else float("nan")
 
-    model = load_model()
-    if model is None:
-        # Deterministic stub so the frontend has something to render in dev.
-        stub = float(1 / (1 + np.exp(-vector.sum() / (len(expected) or 1))))
+    vector = np.array([[_val(name) for name in expected]], dtype=float)
+
+    bundle = load_model()
+    if bundle is None:
+        # Deterministic stub so the frontend has something to render in dev:
+        # a market-implied-ish probability from the spread alone.
+        stub_p = float(
+            1 / (1 + np.exp(-req.spread / (manifest["scale_t"] or 13.0)))
+        )
         return PredictResponse(
             team=req.team,
-            cover_probability=round(stub, 4),
+            cover_probability=round(stub_p, 4),
+            predicted_margin=0.0,
+            edge_pts=round(req.spread, 2),
             model_version=f"stub-{manifest['version']}",
             is_stub=True,
         )
 
-    proba = float(model.predict_proba(vector)[0][1])
+    from scipy import stats  # lazy: keeps the stub path dependency-free
+
+    mu = float(bundle["regressor"].predict(vector)[0])
+    edge = mu + req.spread
+    p_cover = float(stats.t.cdf(edge / bundle["scale_t"], df=bundle["nu_t"]))
     return PredictResponse(
         team=req.team,
-        cover_probability=round(proba, 4),
-        model_version=manifest["version"],
+        cover_probability=round(p_cover, 4),
+        predicted_margin=round(mu, 2),
+        edge_pts=round(edge, 2),
+        model_version=bundle["version"],
         is_stub=False,
     )
 
@@ -345,7 +357,7 @@ def teams() -> dict:
 
 @app.get("/teams/{team}/prediction")
 def team_prediction(team: str) -> dict:
-    """Predict cover probability for one team's current week."""
+    """Predict margin + cover probability for one team's current week."""
     data = load_current_features()
     if data is None:
         raise HTTPException(status_code=404, detail="Current features not available yet.")
@@ -353,7 +365,11 @@ def team_prediction(team: str) -> dict:
     if info is None:
         raise HTTPException(status_code=404, detail=f"Unknown team '{team}'.")
 
-    result = predict(PredictRequest(team=team.upper(), features=info["features"]))
+    result = predict(
+        PredictRequest(
+            team=team.upper(), features=info["features"], spread=info["spread"]
+        )
+    )
     return {
         "team": team.upper(),
         "season": data["season"],
@@ -361,6 +377,8 @@ def team_prediction(team: str) -> dict:
         "spread": info["spread"],
         "cover_record": info["cover_record"],
         "cover_probability": result.cover_probability,
+        "predicted_margin": result.predicted_margin,
+        "edge_pts": result.edge_pts,
         "model_version": result.model_version,
         "is_stub": result.is_stub,
     }

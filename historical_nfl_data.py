@@ -9,6 +9,8 @@ import nfl_data_py as nfl
 import boto3
 import os
 
+from nflverse_compat import import_weekly_data
+
 #We'll get actual performance data from nfl data py (Python vesion of nflfastR)
 #Github repo: https://github.com/cooperdff/nfl_data_py
 
@@ -31,7 +33,7 @@ else:
 
 years = [i for i in range (2018, max_year)]
 
-weekly_data = nfl.import_weekly_data(years)
+weekly_data = import_weekly_data(years)
 
 #Let's filter for only regular season
 weekly_data = weekly_data[weekly_data['season_type'] == 'REG'].reset_index(drop=True)

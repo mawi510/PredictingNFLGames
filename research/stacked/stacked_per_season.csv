@@ -1,0 +1,25 @@
+label,season,bets,wins,losses,win_pct,units,roi
+A: XGB baseline (51 feat),2019,211,111,100,0.5261,0.91,0.0043
+A: XGB baseline (51 feat),2020,221,116,105,0.5249,0.45,0.0021
+A: XGB baseline (51 feat),2021,215,106,109,0.493,-12.64,-0.0588
+A: XGB baseline (51 feat),2022,191,104,87,0.5445,7.55,0.0395
+A: XGB baseline (51 feat),2023,197,100,97,0.5076,-6.09,-0.0309
+A: XGB baseline (51 feat),2024,159,83,76,0.522,-0.55,-0.0034
+B: XGB + theta_diff,2019,218,108,110,0.4954,-11.82,-0.0542
+B: XGB + theta_diff,2020,209,108,101,0.5167,-2.82,-0.0135
+B: XGB + theta_diff,2021,207,110,97,0.5314,3.0,0.0145
+B: XGB + theta_diff,2022,194,101,93,0.5206,-1.18,-0.0061
+B: XGB + theta_diff,2023,194,96,98,0.4948,-10.73,-0.0553
+B: XGB + theta_diff,2024,151,79,72,0.5232,-0.18,-0.0012
+C: XGB + theta_diff + isotonic,2019,0,0,0,0.0,0.0,0.0
+C: XGB + theta_diff + isotonic,2020,74,43,31,0.5811,8.09,0.1093
+C: XGB + theta_diff + isotonic,2021,19,14,5,0.7368,7.73,0.4067
+C: XGB + theta_diff + isotonic,2022,64,34,30,0.5312,0.91,0.0142
+C: XGB + theta_diff + isotonic,2023,164,84,80,0.5122,-3.64,-0.0222
+C: XGB + theta_diff + isotonic,2024,3,2,1,0.6667,0.82,0.2727
+D: LightGBM + theta_diff,2019,227,117,110,0.5154,-3.64,-0.016
+D: LightGBM + theta_diff,2020,211,110,101,0.5213,-1.0,-0.0047
+D: LightGBM + theta_diff,2021,189,96,93,0.5079,-5.73,-0.0303
+D: LightGBM + theta_diff,2022,191,91,100,0.4764,-17.27,-0.0904
+D: LightGBM + theta_diff,2023,209,109,100,0.5215,-0.91,-0.0043
+D: LightGBM + theta_diff,2024,146,69,77,0.4726,-14.27,-0.0978

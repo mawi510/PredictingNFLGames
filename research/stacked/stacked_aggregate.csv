@@ -1,0 +1,5 @@
+label,season,bets,wins,losses,win_pct,units,roi
+A: XGB baseline (51 feat),AGG,1194,620,574,0.5193,-10.37,-0.0087
+B: XGB + theta_diff,AGG,1173,602,571,0.5132,-23.73,-0.0202
+C: XGB + theta_diff + isotonic,AGG,324,177,147,0.5463,13.91,0.0429
+D: LightGBM + theta_diff,AGG,1173,592,581,0.5047,-42.82,-0.0365
