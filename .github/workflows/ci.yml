@@ -1,8 +1,9 @@
 name: CI
 
 # Validates that changes still build and boot the model image before merge.
-# Builds from the PR's contents (no push) and smoke-tests the API in stub mode
-# (no model artifact / AWS creds needed), so it also passes on fork PRs.
+# Builds from the PR's contents (no push) and smoke-tests the API with the
+# committed margin-v2 bundle (baked into the image; no AWS creds needed), so
+# it also passes on fork PRs.
 on:
   pull_request:
     paths:
@@ -31,7 +32,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Boot container (stub mode — no model/creds)
+      - name: Boot container (no AWS creds — model is baked into the image)
         run: |
           docker run -d --name api -p 8000:8000 nfl-api:ci
           for i in $(seq 1 20); do
@@ -44,19 +45,29 @@ jobs:
       - name: Smoke-test endpoints
         run: |
           set -e
-          echo "== /health =="
+          echo "== /health (margin-v2 bundle loaded) =="
           curl -fsS http://localhost:8000/health | tee /tmp/h.json
-          grep -q '"n_features":986' /tmp/h.json
+          grep -q '"n_features":44' /tmp/h.json
+          grep -q '"model_loaded":true' /tmp/h.json
+          grep -q '"model_version":"margin-v2' /tmp/h.json
 
-          echo "== /predict (valid -> 200 stub) =="
+          echo "== /predict (valid -> 200, real prediction) =="
           code=$(curl -s -o /tmp/p.json -w "%{http_code}" -X POST http://localhost:8000/predict \
-            -H 'Content-Type: application/json' -d '{"team":"KC","features":{"spread":-6.5}}')
+            -H 'Content-Type: application/json' \
+            -d '{"team":"KC","features":{"is_home":1.0,"rest":7.0},"spread":-6.5}')
           test "$code" = "200"
-          grep -q '"is_stub":true' /tmp/p.json
+          cat /tmp/p.json
+          grep -q '"is_stub":false' /tmp/p.json
+          grep -q '"predicted_margin"' /tmp/p.json
 
           echo "== /predict (unknown feature -> 422) =="
           code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/predict \
-            -H 'Content-Type: application/json' -d '{"features":{"bogus":1}}')
+            -H 'Content-Type: application/json' -d '{"features":{"bogus":1},"spread":-6.5}')
+          test "$code" = "422"
+
+          echo "== /predict (missing spread -> 422) =="
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8000/predict \
+            -H 'Content-Type: application/json' -d '{"features":{"is_home":1.0}}')
           test "$code" = "422"
           echo "All smoke tests passed."
 
