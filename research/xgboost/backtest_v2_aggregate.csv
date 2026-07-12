@@ -1,0 +1,5 @@
+label,season,bets,wins,losses,win_pct,units,roi
+A: XGB 51 (baseline),AGG,1194,620,574,0.5193,-10.37,-0.0087
+B: XGB 54 (+ prior+blended),AGG,1202,611,591,0.5083,-35.55,-0.0296
+C: XGB 51 + isotonic,AGG,382,208,174,0.5445,15.1,0.0395
+D: XGB 54 + isotonic,AGG,494,266,228,0.5385,13.82,0.028

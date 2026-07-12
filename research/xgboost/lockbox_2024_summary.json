@@ -1,0 +1,179 @@
+{
+  "model_version": "margin_v2_lockbox_2024",
+  "trained_on": "2018-2023",
+  "test_on": "2024",
+  "features_used": 44,
+  "dropped": [
+    "spread",
+    "spread_odds",
+    "moneyline",
+    "exp_total_points",
+    "over_odds",
+    "under_odds",
+    "is_fav"
+  ],
+  "calibration": {
+    "nu_t": 11.793,
+    "scale_t": 13.126,
+    "sigma_normal": 14.36,
+    "resid_n": 544,
+    "resid_source": "2023 OOS"
+  },
+  "aggregate": {
+    "bets": 189,
+    "wins": 109,
+    "pushes": 35,
+    "win_pct": 0.5767,
+    "units": 19.091,
+    "roi": 0.101,
+    "wilson_95_ci": [
+      0.5054,
+      0.6449
+    ],
+    "breakeven_winpct_at_-110": 0.5238
+  },
+  "per_week": [
+    {
+      "week": 1,
+      "bets": 15,
+      "wins": 7,
+      "win_pct": 0.4667,
+      "units": -1.636,
+      "roi": -0.1091
+    },
+    {
+      "week": 2,
+      "bets": 13,
+      "wins": 11,
+      "win_pct": 0.8462,
+      "units": 8.0,
+      "roi": 0.6154
+    },
+    {
+      "week": 3,
+      "bets": 14,
+      "wins": 8,
+      "win_pct": 0.5714,
+      "units": 1.273,
+      "roi": 0.0909
+    },
+    {
+      "week": 4,
+      "bets": 14,
+      "wins": 10,
+      "win_pct": 0.7143,
+      "units": 5.091,
+      "roi": 0.3636
+    },
+    {
+      "week": 5,
+      "bets": 13,
+      "wins": 6,
+      "win_pct": 0.4615,
+      "units": -1.545,
+      "roi": -0.1189
+    },
+    {
+      "week": 6,
+      "bets": 14,
+      "wins": 6,
+      "win_pct": 0.4286,
+      "units": -2.545,
+      "roi": -0.1818
+    },
+    {
+      "week": 7,
+      "bets": 13,
+      "wins": 7,
+      "win_pct": 0.5385,
+      "units": 0.364,
+      "roi": 0.028
+    },
+    {
+      "week": 8,
+      "bets": 15,
+      "wins": 10,
+      "win_pct": 0.6667,
+      "units": 4.091,
+      "roi": 0.2727
+    },
+    {
+      "week": 9,
+      "bets": 13,
+      "wins": 6,
+      "win_pct": 0.4615,
+      "units": -1.545,
+      "roi": -0.1189
+    },
+    {
+      "week": 10,
+      "bets": 13,
+      "wins": 11,
+      "win_pct": 0.8462,
+      "units": 8.0,
+      "roi": 0.6154
+    },
+    {
+      "week": 11,
+      "bets": 14,
+      "wins": 7,
+      "win_pct": 0.5,
+      "units": -0.636,
+      "roi": -0.0455
+    },
+    {
+      "week": 12,
+      "bets": 12,
+      "wins": 5,
+      "win_pct": 0.4167,
+      "units": -2.455,
+      "roi": -0.2045
+    },
+    {
+      "week": 13,
+      "bets": 15,
+      "wins": 8,
+      "win_pct": 0.5333,
+      "units": 0.273,
+      "roi": 0.0182
+    },
+    {
+      "week": 14,
+      "bets": 11,
+      "wins": 7,
+      "win_pct": 0.6364,
+      "units": 2.364,
+      "roi": 0.2149
+    }
+  ],
+  "by_confidence": [
+    {
+      "p_range": "[0.50, 0.55)",
+      "bets": 32,
+      "wins": 17,
+      "win_pct": 0.5312,
+      "roi": 0.0142
+    },
+    {
+      "p_range": "[0.55, 0.60)",
+      "bets": 42,
+      "wins": 24,
+      "win_pct": 0.5714,
+      "roi": 0.0909
+    },
+    {
+      "p_range": "[0.60, 0.70)",
+      "bets": 50,
+      "wins": 31,
+      "win_pct": 0.62,
+      "roi": 0.1836
+    },
+    {
+      "p_range": "[0.70, 1.01)",
+      "bets": 38,
+      "wins": 24,
+      "win_pct": 0.6316,
+      "roi": 0.2057
+    }
+  ]
+}
