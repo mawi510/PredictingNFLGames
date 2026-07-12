@@ -10,6 +10,8 @@ import nfl_data_py as nfl
 import boto3
 import os
 
+from nflverse_compat import import_weekly_data
+
 #We'll get actual performance data from nfl data py (Python vesion of nflfastR) 
 #Github repo: https://github.com/cooperdff/nfl_data_py
 
@@ -22,7 +24,7 @@ else:
 years = [current_year]
 
 
-weekly_data = nfl.import_weekly_data(years)
+weekly_data = import_weekly_data(years)
 
 #Let's filter for only regular season
 weekly_data = weekly_data[weekly_data['season_type'] == 'REG'].reset_index(drop=True)
@@ -533,7 +535,7 @@ weekly_agg = weekly_agg.drop('players_injured', axis=1)
 #Data source is outdated so the creator provided a workaround
 
 url = "https://github.com/nflverse/nflverse-data/releases/download/espn_data/qbr_week_level.parquet"
-qbr = pd.read_parquet(url).loc[lambda x: x.season == 2024].reset_index(drop=True)
+qbr = pd.read_parquet(url).loc[lambda x: x.season == current_year].reset_index(drop=True)
 
 #Changing raiders to LV
 #Also in this table, LA rams are LAR, but in other tables they're just LA
