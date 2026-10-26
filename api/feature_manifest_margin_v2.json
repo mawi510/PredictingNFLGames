@@ -1,5 +1,5 @@
 {
-  "version": "margin-v2.2026.06",
+  "version": "margin-v2.2026.10",
   "model_type": "margin_regressor_xgb",
   "description": "Margin model v2. Regressor predicts E[team_score - opp_score]; cover probability is computed at inference via Student-t CDF((mu_hat + spread) / scale_t, df=nu_t).",
   "n_features": 44,
@@ -66,11 +66,12 @@
     2021,
     2022,
     2023,
-    2024
+    2024,
+    2025
   ],
-  "calib_season": 2024,
-  "scale_t": 13.012859897331953,
-  "nu_t": 38.040096830461394,
-  "sigma_normal": 13.36526644736552,
-  "trained_at": "2026-06-04T00:40:43.790338+00:00"
+  "calib_season": 2025,
+  "scale_t": 13.757953955031446,
+  "nu_t": 50.0,
+  "sigma_normal": 13.757525950595095,
+  "trained_at": "2026-10-26T01:05:43.731195+00:00"
 }

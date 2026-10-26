@@ -10,7 +10,7 @@ Implements the decisions in research/feature_shortlist.md:
   - ADD: matchup-relative features
       passing_epa_minus_opp_passing_epa_allowed
       rushing_epa_minus_opp_rushing_epa_allowed
-    Built by joining each row to its opponent on (season, week, opposite spread, opposite is_home).
+    Built by joining each row to its schedule opponent (pipeline.margin_model).
 
 Inputs:
     nfl_training_data.csv  (2018-2023)
@@ -21,12 +21,14 @@ Output:
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 OUT = Path(__file__).resolve().parent / "features.parquet"
 
 SITUATIONAL = [
@@ -93,50 +95,13 @@ def load_raw() -> pd.DataFrame:
 
 def attach_opponent_matchup(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Pair each row with its opponent (same (season, week), opposite spread, opposite is_home),
-    then compute matchup features:
+    Pair each row with its schedule opponent and compute matchup features:
         passing_epa_minus_opp_passing_epa_allowed
         rushing_epa_minus_opp_rushing_epa_allowed
     """
-    pieces = []
-    for (s, w), wk in df.groupby(["season", "week"], sort=False):
-        rows = wk.reset_index(drop=True).copy()
-        opp_idx = [-1] * len(rows)
-        used = set()
-        for i in range(len(rows)):
-            if i in used:
-                continue
-            ri = rows.iloc[i]
-            cand = [
-                j for j in range(len(rows))
-                if j != i and j not in used
-                and np.isclose(rows.iloc[j]["spread"], -ri["spread"])
-                and rows.iloc[j]["is_home"] == 1 - ri["is_home"]
-            ]
-            if not cand:
-                continue
-            j = cand[0]
-            opp_idx[i] = j
-            opp_idx[j] = i
-            used.add(i)
-            used.add(j)
-        rows["_opp_idx"] = opp_idx
+    from pipeline.margin_model import attach_matchup_features
 
-        opp_pe = rows["total_passing_epa_allowed_rolling_shifted"].values
-        opp_re = rows["total_rushing_epa_allowed_rolling_shifted"].values
-        pe_diff = np.full(len(rows), np.nan)
-        re_diff = np.full(len(rows), np.nan)
-        for i, oi in enumerate(opp_idx):
-            if oi < 0:
-                continue
-            pe_diff[i] = rows.iloc[i]["total_passing_epa_rolling_shifted"] - opp_pe[oi]
-            re_diff[i] = rows.iloc[i]["total_rushing_epa_rolling_shifted"] - opp_re[oi]
-        rows["passing_epa_minus_opp_passing_epa_allowed"] = pe_diff
-        rows["rushing_epa_minus_opp_rushing_epa_allowed"] = re_diff
-        rows = rows.drop(columns=["_opp_idx"])
-        pieces.append(rows)
-
-    return pd.concat(pieces, ignore_index=True)
+    return attach_matchup_features(df).drop(columns=["opponent"])
 
 
 def main():

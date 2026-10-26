@@ -30,6 +30,7 @@ Run:
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,7 +41,9 @@ import xgboost as xgb
 from scipy import stats
 
 REPO = Path(__file__).resolve().parents[1]
-FEATURES_PARQUET = REPO / "research" / "xgboost" / "features.parquet"
+sys.path.insert(0, str(REPO))
+from pipeline.margin_model import load_schedule  # noqa: E402
+FEATURES_PARQUET = REPO / "research" / "xgboost" / "features_2025.parquet"
 MODEL_OUT = REPO / "api" / "model_margin_v2.pkl"
 MANIFEST_OUT = REPO / "api" / "feature_manifest_margin_v2.json"
 
@@ -62,23 +65,9 @@ XGB_REG_KW = dict(
 
 
 def load_margins() -> pd.DataFrame:
-    """Pull actual game margins from nfl_data_py schedules (training target)."""
-    import nfl_data_py as nfl
-
-    sched = nfl.import_schedules(list(range(2018, datetime.now(timezone.utc).year + 1)))
-    sched = sched.dropna(subset=["home_score", "away_score"])
-    home = sched.rename(columns={"home_team": "team"})
-    home["margin"] = home["home_score"] - home["away_score"]
-    away = sched.rename(columns={"away_team": "team"})
-    away["margin"] = away["away_score"] - away["home_score"]
-    out = pd.concat(
-        [home[["season", "week", "team", "margin"]],
-         away[["season", "week", "team", "margin"]]],
-        ignore_index=True,
-    )
-    out["season"] = out["season"].astype(int)
-    out["week"] = out["week"].astype(int)
-    return out
+    """Actual game margins from the nflverse schedule (training target)."""
+    sched = load_schedule(range(2018, datetime.now(timezone.utc).year + 1))
+    return sched.dropna(subset=["margin"])[["season", "week", "team", "margin"]]
 
 
 def main() -> None:
