@@ -59,8 +59,9 @@ def load_bundle(path: str | Path = DEFAULT_BUNDLE_PATH):
 def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
     """One row per team-game from the nflverse schedule, regular season only.
 
-    Columns: season, week, team, opponent, is_home, margin (NaN until played).
-    Team codes are normalized to the stats data's current codes.
+    Columns: season, week, team, opponent, is_home, kickoff (ISO, Eastern),
+    margin (NaN until played). Team codes are normalized to the stats data's
+    current codes.
     """
     key = tuple(sorted({int(s) for s in seasons}))
     if key in _schedule_cache:
@@ -71,21 +72,32 @@ def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
     sched = sched[sched["game_type"] == "REG"]
     for col in ("home_team", "away_team"):
         sched[col] = sched[col].replace(TEAM_ALIASES)
+    kickoff = _kickoff_iso(sched["gameday"], sched["gametime"])
     home = pd.DataFrame({
         "season": sched["season"], "week": sched["week"],
         "team": sched["home_team"], "opponent": sched["away_team"], "is_home": 1,
-        "margin": sched["home_score"] - sched["away_score"],
+        "kickoff": kickoff, "margin": sched["home_score"] - sched["away_score"],
     })
     away = pd.DataFrame({
         "season": sched["season"], "week": sched["week"],
         "team": sched["away_team"], "opponent": sched["home_team"], "is_home": 0,
-        "margin": sched["away_score"] - sched["home_score"],
+        "kickoff": kickoff, "margin": sched["away_score"] - sched["home_score"],
     })
     out = pd.concat([home, away], ignore_index=True)
     out["season"] = out["season"].astype(int)
     out["week"] = out["week"].astype(int)
     _schedule_cache[key] = out
     return out
+
+
+def _kickoff_iso(gameday: pd.Series, gametime: pd.Series) -> pd.Series:
+    """nflverse gives the date and an Eastern clock time; emit ISO with the offset."""
+    from zoneinfo import ZoneInfo
+
+    stamps = pd.to_datetime(gameday.astype(str) + " " + gametime.fillna("00:00").astype(str),
+                            errors="coerce")
+    return stamps.dt.tz_localize(ZoneInfo("America/New_York")).apply(
+        lambda t: t.isoformat() if pd.notna(t) else None)
 
 
 def attach_opponent(df: pd.DataFrame) -> pd.DataFrame:

@@ -5,7 +5,8 @@ to predict, but the slim API image has no pandas and shouldn't load the wide
 CSV. So this job — run weekly alongside the backtest — distills the latest
 week of data into a small JSON the API reads directly: for each team, its
 named feature values (null where unavailable; the model handles missing
-natively) plus a few display fields (spread, week, cover record).
+natively) plus display and game context (spread, week, cover record,
+opponent, home flag, kickoff).
 
 Two model features are opponent-relative and not CSV columns; they're built
 here via pipeline.margin_model.attach_matchup_features().
@@ -25,7 +26,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pipeline.margin_model import attach_matchup_features
+from pipeline.margin_model import attach_matchup_features, load_schedule
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = ROOT / "api" / "feature_manifest_margin_v2.json"
@@ -57,7 +58,9 @@ def build() -> dict:
     latest_season = int(df["season"].max())
     latest_week = int(df[df["season"] == latest_season]["week"].max())
     season = df[df["season"] == latest_season]
-    season = attach_matchup_features(season)
+    season = attach_matchup_features(season)  # also attaches `opponent`
+    kickoffs = load_schedule([latest_season])[["season", "week", "team", "kickoff"]]
+    season = season.merge(kickoffs, on=["season", "week", "team"], how="left")
 
     teams = {}
     for team, grp in season.groupby("team"):
@@ -66,6 +69,10 @@ def build() -> dict:
             "week": int(row["week"]),
             "spread": _num(row.get("spread")),
             "cover_record": _num(row.get(COVER_RECORD_COL)),
+            # Game context so the API can pair the two sides of each game.
+            "opponent": row["opponent"] if pd.notna(row.get("opponent")) else None,
+            "is_home": int(row["is_home"]) if pd.notna(row.get("is_home")) else None,
+            "kickoff": row["kickoff"] if pd.notna(row.get("kickoff")) else None,
             # Ordered feature values; unavailable -> null (model is NaN-native).
             "features": {f: _num_or_none(row.get(f)) for f in features},
         }

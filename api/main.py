@@ -357,7 +357,7 @@ def teams() -> dict:
 
 @app.get("/teams/{team}/prediction")
 def team_prediction(team: str) -> dict:
-    """Predict margin + cover probability for one team's current week."""
+    """Margin + cover probability for one team's current game (shared with its opponent)."""
     data = load_current_features()
     if data is None:
         raise HTTPException(status_code=404, detail="Current features not available yet.")
@@ -365,6 +365,12 @@ def team_prediction(team: str) -> dict:
     if info is None:
         raise HTTPException(status_code=404, detail=f"Unknown team '{team}'.")
 
+    game = _game_prediction(data, team.upper())
+    if game is not None:
+        return {"season": data["season"], **game}
+
+    # Fallback for a features file without opponent data: the team's own
+    # margin estimate (the two sides of a game then need not sum to 1).
     result = predict(
         PredictRequest(
             team=team.upper(), features=info["features"], spread=info["spread"]
@@ -381,6 +387,111 @@ def team_prediction(team: str) -> dict:
         "edge_pts": result.edge_pts,
         "model_version": result.model_version,
         "is_stub": result.is_stub,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Game-level prediction: one shared margin per game so the two sides' cover
+# probabilities sum to 1. (Each team's own row gives its own margin estimate;
+# the game margin is the average of the two views, which is also exactly the
+# quantity the backtest's "pick the higher-probability side" rule compares.)
+# --------------------------------------------------------------------------- #
+def _predict_mu(bundle, features: dict) -> float:
+    names = load_manifest()["features"]
+    vector = np.array(
+        [[float(features[n]) if features.get(n) is not None else float("nan") for n in names]],
+        dtype=float,
+    )
+    return float(bundle["regressor"].predict(vector)[0])
+
+
+def _game_prediction(data: dict, team: str) -> Optional[dict]:
+    """Prediction for `team` against its scheduled opponent, or None if the
+    features file has no opponent for it (pre-refresh format or a bye)."""
+    info = data["teams"].get(team)
+    opp = info.get("opponent") if info else None
+    opp_info = data["teams"].get(opp) if opp else None
+    if not info or not opp_info or opp_info.get("opponent") != team:
+        return None
+
+    bundle = load_model()
+    manifest = load_manifest()
+    if bundle is None:
+        margin, scale, nu = 0.0, (manifest["scale_t"] or 13.0), (manifest["nu_t"] or 30.0)
+        version, is_stub = f"stub-{manifest['version']}", True
+    else:
+        margin = (_predict_mu(bundle, info["features"]) - _predict_mu(bundle, opp_info["features"])) / 2
+        scale, nu, version, is_stub = bundle["scale_t"], bundle["nu_t"], bundle["version"], False
+
+    from scipy import stats
+
+    edge = margin + info["spread"]
+    p_cover = float(stats.t.cdf(edge / scale, df=nu))
+    return {
+        "team": team,
+        "opponent": opp,
+        "is_home": info.get("is_home"),
+        "kickoff": info.get("kickoff"),
+        "week": info["week"],
+        "spread": info["spread"],
+        "cover_record": info["cover_record"],
+        "cover_probability": round(p_cover, 4),
+        "predicted_margin": round(margin, 2),
+        "edge_pts": round(edge, 2),
+        "model_version": version,
+        "is_stub": is_stub,
+    }
+
+
+@app.get("/slate")
+def slate() -> dict:
+    """Every game of the current week: both sides, one shared cover probability."""
+    data = load_current_features()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Current features not available yet.")
+    week = data["latest_week"]
+    games, seen, version, is_stub = [], set(), None, False
+    for team, info in data["teams"].items():
+        opp = info.get("opponent")
+        if not opp or info["week"] != week or frozenset((team, opp)) in seen:
+            continue
+        g = _game_prediction(data, team)
+        if g is None:
+            continue
+        seen.add(frozenset((team, opp)))
+        version, is_stub = g["model_version"], g["is_stub"]
+        home, away = (team, opp) if g["is_home"] else (opp, team)
+        p_home = g["cover_probability"] if g["is_home"] else round(1 - g["cover_probability"], 4)
+        margin_home = g["predicted_margin"] if g["is_home"] else -g["predicted_margin"]
+        spread_home = data["teams"][home]["spread"]
+        pick = home if p_home >= 0.5 else away
+        games.append({
+            "away": away,
+            "home": home,
+            "kickoff": g["kickoff"],
+            "spread_home": spread_home,
+            "favorite": home if spread_home < 0 else away if spread_home > 0 else None,
+            "spread_fav": -abs(spread_home),
+            "p_home": p_home,
+            "p_away": round(1 - p_home, 4),
+            "predicted_margin_home": round(margin_home, 2),
+            "pick": pick,
+            "p_pick": max(p_home, round(1 - p_home, 4)),
+            "edge_pts": round(margin_home + spread_home if pick == home else -margin_home - spread_home, 2),
+        })
+    if not games:
+        raise HTTPException(
+            status_code=503,
+            detail="Slate unavailable: current features carry no opponent data yet.",
+        )
+    games.sort(key=lambda g: (g["kickoff"] is None, g["kickoff"] or "", g["home"]))
+    return {
+        "season": data["season"],
+        "week": week,
+        "generated_at": data.get("generated_at"),
+        "model_version": version,
+        "is_stub": is_stub,
+        "games": games,
     }
 
 
