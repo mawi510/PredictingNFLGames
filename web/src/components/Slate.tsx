@@ -35,7 +35,7 @@ export default function Slate({
 }) {
   return (
     <div className="rounded-[4px] border border-line bg-surface">
-      <div className={`label hidden h-8 items-center gap-x-6 border-b border-line px-3 text-fg-2 md:grid ${ROW_COLS}`}>
+      <div className={`label hidden h-8 items-center gap-x-4 border-b border-line px-3 text-fg-2 lg:grid ${ROW_COLS}`}>
         {HEADERS.map((h) => (
           <span key={h.label} className={h.align === "right" ? "text-right" : ""}>
             {h.label}

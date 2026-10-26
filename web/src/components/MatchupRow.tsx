@@ -7,10 +7,12 @@ import { teamLogo, teamName } from "@/lib/teams";
 import PickBadge from "./PickBadge";
 import ProbabilityBar from "./ProbabilityBar";
 
-// Desktop column widths. Team columns flex; the numeric columns are fixed so
-// every number lines up down the page.
+// One-line layout from 1024px up. Team columns flex; the numeric columns are
+// fixed so every number lines up down the page. Fixed widths plus gaps must
+// stay under the narrowest lg viewport or the last column spills out of the
+// table: 72 + 200 + 112 + 88 + 5 gaps of 16 + 2 x 140 minimum = 832px.
 export const ROW_COLS =
-  "md:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_80px_200px_120px_80px]";
+  "lg:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_72px_200px_112px_88px]";
 
 export default function MatchupRow({
   game,
@@ -29,23 +31,23 @@ export default function MatchupRow({
   return (
     <Link
       href={`/teams/?team=${encodeURIComponent(showPicks ? game.pick : game.home)}`}
-      className={`grid min-h-16 grid-cols-2 items-center gap-x-6 gap-y-1 border-b border-line px-3 py-2 transition-colors duration-100 hover:bg-surface-2 md:min-h-11 md:py-0 ${ROW_COLS} ${
+      className={`grid min-h-16 grid-cols-2 items-center gap-x-4 gap-y-1 border-b border-line px-3 py-2 transition-colors duration-100 hover:bg-surface-2 lg:min-h-11 lg:py-0 ${ROW_COLS} ${
         dimmed ? "opacity-60" : ""
       }`}
     >
       <Team abbr={game.away} />
       <Team abbr={game.home} home />
 
-      <div className="label col-span-2 flex items-center gap-3 text-fg-2 md:hidden">
+      <div className="label col-span-2 flex items-center gap-3 text-fg-2 lg:hidden">
         <span>{game.kickoff ? formatKickoffTime(game.kickoff) : "TBD"}</span>
         <SpreadToken game={game} />
       </div>
 
-      <div className="hidden text-right font-mono text-[13px] text-fg md:block">
+      <div className="hidden whitespace-nowrap text-right font-mono text-[13px] text-fg lg:block">
         <SpreadToken game={game} />
       </div>
 
-      <div className="col-span-1 md:col-span-1">
+      <div>
         {showPicks ? (
           <ProbabilityBar pAway={game.p_away} pickSide={pickIsHome ? "home" : "away"} />
         ) : (
@@ -53,13 +55,13 @@ export default function MatchupRow({
         )}
       </div>
 
-      <div className="text-right md:text-left">
+      <div className="text-right lg:text-left">
         {showPicks && (
           <PickBadge team={game.pick} spread={pickSpread} probability={game.p_pick} />
         )}
       </div>
 
-      <div className="num hidden text-right font-mono text-[13px] text-fg-2 md:block">
+      <div className="num hidden whitespace-nowrap text-right font-mono text-[13px] text-fg-2 lg:block">
         {showPicks ? `${marginTeam} ${formatMargin(marginAbs)}` : "-"}
       </div>
     </Link>
@@ -87,7 +89,7 @@ function Team({ abbr, home = false }: { abbr: string; home?: boolean }) {
         <span className="hidden lg:inline">{teamName(abbr)}</span>
         <span className="lg:hidden">{abbr}</span>
       </span>
-      {home && <span className="label hidden text-fg-3 md:inline">home</span>}
+      {home && <span className="label hidden text-fg-3 lg:inline">home</span>}
     </div>
   );
 }
