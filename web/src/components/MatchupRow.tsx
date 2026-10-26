@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 import type { SlateGame } from "@/lib/api";
-import { formatKickoffTime, formatMargin, formatSpread } from "@/lib/format";
+import { formatKickoffTime, formatSpread } from "@/lib/format";
 import { teamLogo, teamName } from "@/lib/teams";
+import CoverProbability from "./CoverProbability";
 import PickBadge from "./PickBadge";
-import ProbabilityBar from "./ProbabilityBar";
 
 // One-line layout from 1024px up. Team columns flex; the numeric columns are
 // fixed so every number lines up down the page. Fixed widths plus gaps must
 // stay under the narrowest lg viewport or the last column spills out of the
-// table: 72 + 200 + 112 + 88 + 5 gaps of 16 + 2 x 140 minimum = 832px.
+// table: 72 + 176 + 112 + 88 + 5 gaps of 16 + 2 x 140 minimum = 808px.
 export const ROW_COLS =
-  "lg:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_72px_200px_112px_88px]";
+  "lg:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_72px_176px_112px_88px]";
 
 export default function MatchupRow({
   game,
@@ -25,8 +25,10 @@ export default function MatchupRow({
 }) {
   const pickIsHome = game.pick === game.home;
   const pickSpread = pickIsHome ? game.spread_home : -game.spread_home;
-  const marginTeam = game.predicted_margin_home >= 0 ? game.home : game.away;
-  const marginAbs = Math.abs(game.predicted_margin_home);
+  // The model's expected final margin, written as a line on the team it
+  // favours so it reads directly against the market spread beside it.
+  const modelFav = game.predicted_margin_home >= 0 ? game.home : game.away;
+  const modelLine = -Math.abs(game.predicted_margin_home);
 
   return (
     <Link
@@ -49,7 +51,7 @@ export default function MatchupRow({
 
       <div>
         {showPicks ? (
-          <ProbabilityBar pAway={game.p_away} pickSide={pickIsHome ? "home" : "away"} />
+          <CoverProbability away={game.away} home={game.home} pAway={game.p_away} pick={game.pick} />
         ) : (
           <span className="text-fg-3">-</span>
         )}
@@ -62,7 +64,7 @@ export default function MatchupRow({
       </div>
 
       <div className="num hidden whitespace-nowrap text-right font-mono text-[13px] text-fg-2 lg:block">
-        {showPicks ? `${marginTeam} ${formatMargin(marginAbs)}` : "-"}
+        {showPicks ? (modelLine === 0 ? "PK" : `${modelFav} ${formatSpread(modelLine)}`) : "-"}
       </div>
     </Link>
   );

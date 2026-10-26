@@ -81,9 +81,9 @@ export default function Home() {
       {slate.data && (
         <div className="mt-6 max-w-[680px] text-[13px] leading-6 text-fg-2">
           <h2 className="label mb-2 text-fg-3">How to read this</h2>
-          <p>Spread is the market line on the favourite. Cover prob is the model&apos;s chance each side covers that line; the two sides sum to 100.</p>
+          <p>Spread is the market line, written on the favourite. Model line is the model&apos;s expected final margin written the same way: the regressor predicts each team&apos;s margin of victory from its form, with no market inputs.</p>
+          <p>Cover prob is the chance each side covers the market spread, derived from the gap between the model line and the spread. The two sides sum to 100.</p>
           <p>Pick is the side with the higher cover probability. Below 52% it is marked as a lean.</p>
-          <p>Margin is the model&apos;s expected final margin for the team named, before the spread is applied.</p>
           <p className="label mt-3 text-fg-3">{slate.data.model_version}</p>
         </div>
       )}

@@ -10,7 +10,7 @@ const HEADERS: { label: string; align?: "right" }[] = [
   { label: "Spread", align: "right" },
   { label: "Cover prob" },
   { label: "Pick" },
-  { label: "Margin", align: "right" },
+  { label: "Model line", align: "right" },
 ];
 
 function groupByDay(games: SlateGame[]): { day: string; games: SlateGame[] }[] {
