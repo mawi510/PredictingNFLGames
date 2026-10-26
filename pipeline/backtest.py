@@ -3,11 +3,11 @@
 Answers the site's headline feature: "if you'd followed the model's picks this
 season, what would your record be?" For every game of the latest season, the
 model predicts each side's cover probability at the market spread, picks the
-higher-probability side, and is scored against the actual `is_cover` outcome.
+higher-probability side, and is graded against the actual margin from the schedule.
 
 Methodology (kept transparent and surfaced in the output JSON):
   * One pick per GAME (sides are paired; never both sides of the same game).
-  * Pushes (neither side covers) are excluded from the record entirely —
+  * Pushes (neither side covers) are excluded from the record entirely;
     a real sportsbook refunds them.
   * Picks start at `MIN_WEEK` (matches the site's "come back for Week 4" rule).
   * Units assume flat -110 bets: a win pays +0.909u, a loss -1.0u.
@@ -35,6 +35,7 @@ from pipeline.margin_model import (
     DEFAULT_BUNDLE_PATH,
     attach_matchup_features,
     load_bundle,
+    load_schedule,
     pair_games,
     predict_cover,
 )
@@ -71,6 +72,12 @@ def build_track_record() -> dict:
     latest_season = int(df["season"].max())
     latest_week = int(df[df["season"] == latest_season]["week"].max())
     season = df[(df["season"] == latest_season) & (df["week"] >= MIN_WEEK)].copy()
+    # Grade from the schedule, not the file's is_cover: the weekly pull writes
+    # the coming week's rows before kickoff with is_cover 0 on both sides, and
+    # that flag never updates for games played after the pull.
+    played = load_schedule([latest_season]).dropna(subset=["margin"])
+    season = season.merge(played[["season", "week", "team", "margin"]], on=["season", "week", "team"])
+    season["covered"] = np.sign(season["margin"] + season["spread"])  # 1 cover, 0 push, -1 fail
     season = season.sort_values(["week", "team"]).reset_index(drop=True)
     season = attach_matchup_features(season)
 
@@ -87,14 +94,14 @@ def build_track_record() -> dict:
         wk = wk.reset_index(drop=True)
         for i, j in pair_games(wk):
             ri, rj = wk.iloc[i], wk.iloc[j]
-            if int(ri["is_cover"]) == 0 and int(rj["is_cover"]) == 0:
+            if ri["covered"] == 0:
                 pushes += 1
                 continue
             if float(ri["cover_proba"]) >= float(rj["cover_proba"]):
                 side = ri
             else:
                 side = rj
-            won = int(side["is_cover"]) == 1
+            won = side["covered"] > 0
             pick_rows.append({
                 "week": int(week),
                 "team": str(side["team"]),

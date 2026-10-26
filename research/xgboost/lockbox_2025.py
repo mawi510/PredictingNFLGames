@@ -9,7 +9,7 @@ shifted one season forward:
   1. Calibrate Student-t on OOS residuals (train 2018-2023, resid on 2024).
   2. Train final XGBRegressor on 2018-2024 with target = margin.
   3. Predict every 2025 team-week, P(cover) at the market spread.
-  4. Per-game argmax pick, pushes excluded, score against actual covers.
+  4. Per-game argmax pick (sides paired by schedule opponent), pushes excluded.
 
 No hyperparameter changes. No reruns. One shot; the number is the number.
 Note: dakota_rolling_shifted is NaN for all 2025 rows (dropped upstream) --
@@ -22,6 +22,7 @@ Output:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +31,8 @@ import xgboost as xgb
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT.parents[1]))
+from pipeline.margin_model import attach_opponent, load_schedule, pair_games  # noqa: E402
 FEATURES = ROOT / "features_2025.parquet"
 PICKS_OUT = ROOT / "lockbox_2025_picks.csv"
 SUMMARY_OUT = ROOT / "lockbox_2025_summary.json"
@@ -49,27 +52,16 @@ XGB_REG_KW = dict(
 
 
 def load_margin_target() -> pd.DataFrame:
-    import nfl_data_py as nfl
-    sched = nfl.import_schedules(list(range(2018, 2026)))
-    sched = sched.dropna(subset=["home_score", "away_score"])
-    home = sched.rename(columns={"home_team": "team"})
-    home["margin"] = home["home_score"] - home["away_score"]
-    away = sched.rename(columns={"away_team": "team"})
-    away["margin"] = away["away_score"] - away["home_score"]
-    out = pd.concat([
-        home[["season", "week", "team", "margin"]],
-        away[["season", "week", "team", "margin"]],
-    ], ignore_index=True)
-    out["season"] = out["season"].astype(int)
-    out["week"] = out["week"].astype(int)
-    return out
+    sched = load_schedule(range(2018, 2026))
+    return sched.dropna(subset=["margin"])[["season", "week", "team", "margin"]]
 
 
 def main():
-    df = pd.read_parquet(FEATURES).merge(
+    df = attach_opponent(pd.read_parquet(FEATURES)).merge(
         load_margin_target(), on=["season", "week", "team"], how="inner"
     )
-    feat = [c for c in df.columns if c not in ID_COLS + ["margin"] and c not in DROP_FEATS]
+    feat = [c for c in df.columns
+            if c not in ID_COLS + ["margin", "opponent"] and c not in DROP_FEATS]
     print(f"Loaded {len(df):,} rows.  Margin-model features: {len(feat)}")
 
     # ----- 1. Calibration: train on 2018-2023, residuals on 2024
@@ -106,15 +98,8 @@ def main():
     pushes = 0
     for (s, w), wk in test.groupby(["season", "week"], sort=False):
         wk = wk.reset_index(drop=True)
-        used = set()
-        for i in range(len(wk)):
-            if i in used: continue
-            ri = wk.iloc[i]
-            cand = [j for j in range(len(wk)) if j != i and j not in used
-                    and np.isclose(wk.iloc[j]["spread"], -ri["spread"])
-                    and wk.iloc[j]["is_home"] == 1 - ri["is_home"]]
-            if not cand: continue
-            j = cand[0]; used.add(i); used.add(j); rj = wk.iloc[j]
+        for i, j in pair_games(wk):
+            ri, rj = wk.iloc[i], wk.iloc[j]
             ya, yb = int(ri["is_cover"]), int(rj["is_cover"])
             pa, pb = float(ri["p_cover_t"]), float(rj["p_cover_t"])
             if ya == 0 and yb == 0:
