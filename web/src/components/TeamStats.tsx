@@ -11,162 +11,132 @@ import {
   YAxis,
 } from "recharts";
 import { getTeamStats, type TeamStats as Stats } from "@/lib/api";
+import SegmentedControl from "./SegmentedControl";
+
+const TICK = { fontSize: 11, fontFamily: "var(--font-mono)", fill: "var(--fg-3)" };
+
+interface Loaded {
+  forTeam: string;
+  stats: Stats | null;
+  failed: boolean;
+}
 
 export default function TeamStats({ team }: { team: string }) {
-  const [stats, setStats] = useState<Stats | null>(null);
+  // Keyed by team so a team change shows the loading block without a reset
+  // effect; the old team's stats are simply not for this team.
+  const [loaded, setLoaded] = useState<Loaded>({ forTeam: "", stats: null, failed: false });
   const [season, setSeason] = useState("");
   const [metric, setMetric] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const stats = loaded.forTeam === team ? loaded.stats : null;
+  const failed = loaded.forTeam === team && loaded.failed;
 
   useEffect(() => {
-    setStats(null);
-    setError(null);
     if (!team) return;
+    let active = true;
     getTeamStats(team)
       .then((s) => {
-        setStats(s);
+        if (!active) return;
+        setLoaded({ forTeam: team, stats: s, failed: false });
         setSeason(String(s.seasons[0] ?? ""));
         setMetric(s.metrics[0]?.key ?? "");
       })
-      .catch(() => setError(`Couldn't load stats for ${team}.`));
+      .catch(() => {
+        if (active) setLoaded({ forTeam: team, stats: null, failed: true });
+      });
+    return () => {
+      active = false;
+    };
   }, [team]);
 
-  // Metrics that actually have data for the chosen season.
+  // Metrics that actually have data for the chosen season; if the chosen
+  // metric is not among them, fall back to the first one that is.
   const availableMetrics = useMemo(() => {
     if (!stats || !season) return stats?.metrics ?? [];
     const present = stats.series[season]?.metrics ?? {};
     return stats.metrics.filter((m) => m.key in present);
   }, [stats, season]);
+  const activeMetric = availableMetrics.some((m) => m.key === metric)
+    ? metric
+    : (availableMetrics[0]?.key ?? "");
 
   const chartData = useMemo(() => {
-    if (!stats || !season || !metric) return [];
+    if (!stats || !season || !activeMetric) return [];
     const s = stats.series[season];
-    if (!s || !(metric in s.metrics)) return [];
-    return s.weeks.map((week, i) => ({ week, value: s.metrics[metric][i] }));
-  }, [stats, season, metric]);
+    if (!s || !(activeMetric in s.metrics)) return [];
+    return s.weeks.map((week, i) => ({ week, value: s.metrics[activeMetric][i] }));
+  }, [stats, season, activeMetric]);
 
-  // Keep the metric valid when the season changes.
-  useEffect(() => {
-    if (availableMetrics.length && !availableMetrics.some((m) => m.key === metric)) {
-      setMetric(availableMetrics[0].key);
-    }
-  }, [availableMetrics, metric]);
+  const metricLabel = stats?.metrics.find((m) => m.key === activeMetric)?.label ?? "";
 
-  const metricLabel =
-    stats?.metrics.find((m) => m.key === metric)?.label ?? "";
+  if (failed) {
+    return <p className="text-[13px] text-fg-2">Stats for {team} are not available right now.</p>;
+  }
+  if (!stats) {
+    return <div className="h-60 w-full bg-surface-2" aria-busy="true" />;
+  }
 
   return (
-    <section className="mt-8">
-      <h2 className="mb-1 text-lg font-semibold">Team performance</h2>
-      <p className="mb-4 text-sm text-muted">
-        How a team&apos;s weekly numbers have trended, this season and in past
-        seasons.
-      </p>
-
-      <div className="rounded-xl border border-border bg-surface p-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
+    <section>
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="label w-14 text-fg-3">Season</span>
+          <SegmentedControl
             label="Season"
+            options={stats.seasons.map((s) => ({ value: String(s), label: String(s) }))}
             value={season}
             onChange={setSeason}
-            disabled={!stats}
-          >
-            {stats?.seasons.map((s) => (
-              <option key={s} value={String(s)}>
-                {s}
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            label="Metric"
-            value={metric}
-            onChange={setMetric}
-            disabled={!stats}
-          >
-            {availableMetrics.map((m) => (
-              <option key={m.key} value={m.key}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="label w-14 text-fg-3">Metric</span>
+          <SegmentedControl
+            label="Metric"
+            options={availableMetrics.map((m) => ({ value: m.key, label: m.label }))}
+            value={activeMetric}
+            onChange={setMetric}
+          />
+        </div>
+      </div>
 
-        {error && <p className="mt-4 text-sm text-danger">{error}</p>}
-
-        {stats && chartData.length > 0 && (
-          <div className="mt-6 h-72 w-full">
+      <div className="rounded-[4px] border border-line bg-surface p-4">
+        <h2 className="label mb-3 text-fg-2">
+          {metricLabel} by week, {season}
+        </h2>
+        {chartData.length > 0 ? (
+          <div className="h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}>
-                <CartesianGrid stroke="var(--border)" vertical={false} />
-                <XAxis
-                  dataKey="week"
-                  stroke="var(--muted)"
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  label={{ value: "Week", position: "insideBottom", offset: -2, fill: "var(--muted)", fontSize: 12 }}
-                />
-                <YAxis stroke="var(--muted)" tick={{ fontSize: 12 }} tickLine={false} width={44} />
+              <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="week" tick={TICK} tickLine={false} axisLine={{ stroke: "var(--line)" }} />
+                <YAxis tick={TICK} tickLine={false} axisLine={false} width={48} />
                 <Tooltip
+                  cursor={{ stroke: "var(--line-strong)" }}
                   contentStyle={{
                     background: "var(--surface-2)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--foreground)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 4,
+                    color: "var(--fg)",
+                    fontSize: 13,
                   }}
                   labelFormatter={(w) => `Week ${w}`}
                   formatter={(v) => [v as number, metricLabel]}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="value"
                   stroke="var(--accent)"
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
+                  strokeWidth={1.5}
+                  dot={false}
                   connectNulls
                   isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        )}
-
-        {!stats && !error && (
-          <p className="mt-6 text-sm text-muted">
-            {team
-              ? "Loading trends…"
-              : "Select a team above to see their weekly trends."}
-          </p>
+        ) : (
+          <p className="text-[13px] text-fg-2">No data for this season and metric.</p>
         )}
       </div>
     </section>
-  );
-}
-
-function Select({
-  label,
-  value,
-  onChange,
-  disabled,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm text-muted">{label}</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-border bg-surface-2 px-4 py-3 text-foreground outline-none focus:border-accent disabled:opacity-50"
-      >
-        {children}
-      </select>
-    </label>
   );
 }

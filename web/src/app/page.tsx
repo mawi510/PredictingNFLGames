@@ -1,106 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import PredictionPicker from "@/components/PredictionPicker";
-import TeamStats from "@/components/TeamStats";
-import { getStatus, getTeams, type Status } from "@/lib/api";
-import { teamName } from "@/lib/teams";
-
-const FORCE_IN_SEASON = process.env.NEXT_PUBLIC_FORCE_IN_SEASON === "true";
+import HowToRead from "@/components/HowToRead";
+import RecordStrip from "@/components/RecordStrip";
+import Slate, { SlateLoading } from "@/components/Slate";
+import StatTile from "@/components/StatTile";
+import type { SlateGame } from "@/lib/api";
+import { useAppData } from "@/lib/data";
+import { formatPct, formatUnits, formatUpdatedDay } from "@/lib/format";
 
 export default function Home() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [teams, setTeams] = useState<string[]>([]);
-  const [team, setTeam] = useState("");
-  const [failed, setFailed] = useState(false);
+  const { status, slate, record } = useAppData();
+  const s = status.data;
+  const minWeek = record.data?.methodology.min_week ?? 4;
 
-  useEffect(() => {
-    getStatus().then(setStatus).catch(() => setFailed(true));
-    getTeams()
-      .then((res) => setTeams(res.teams.map((t) => t.team)))
-      .catch(() => setFailed(true));
-  }, []);
+  if (status.loading || slate.loading) {
+    return (
+      <>
+        <PageHeading title="" />
+        <SlateLoading />
+      </>
+    );
+  }
 
-  const showPicker = FORCE_IN_SEASON || status?.predictions_available;
+  // API down and nothing cached: one line, no advice.
+  if (!s && !slate.data) {
+    const lastGood = record.data?.generated_at;
+    return (
+      <p className="text-[13px] text-fg-2">
+        The model API is not responding.
+        {lastGood && ` Last good update: ${titleCase(formatUpdatedDay(lastGood))}.`} Try
+        again in a minute.
+      </p>
+    );
+  }
+
+  const offSeason = s ? !s.in_season : false;
+  const showPicks = s ? s.predictions_available : true;
+  const week = slate.data?.week ?? s?.latest_week;
+
+  if (offSeason) {
+    const r = record.data?.record;
+    const season = record.data?.season ?? s?.season;
+    return (
+      <>
+        <PageHeading title={`${season} final`} />
+        {r && (
+          <div className="mb-6 grid grid-cols-2 gap-6 sm:grid-cols-3">
+            <StatTile label="Record" value={`${r.wins}-${r.losses}`} meta={`${r.total_picks} picks`} />
+            <StatTile label="Units" value={formatUnits(r.total_units)} tone={r.total_units} />
+            <StatTile label="Win %" value={formatPct(r.win_pct)} meta={`since Wk ${minWeek}`} />
+          </div>
+        )}
+        <p className="mb-6 text-[13px] text-fg-2">
+          Off season.
+          {r && ` ${season} final: ${r.wins}-${r.losses}, ${formatUnits(r.total_units)} over ${r.total_picks} picks.`}{" "}
+          Next slate: Week {minWeek}, {(season ?? 0) + 1}.
+        </p>
+        {slate.data && <Slate slate={slate.data} showPicks dimmed />}
+      </>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <section className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Will they cover the spread?
-        </h1>
-      </section>
+    <>
+      <PageHeading title={`Week ${week} slate`}>
+        {record.data && <RecordStrip record={record.data} />}
+      </PageHeading>
 
-      {failed ? (
-        <Card>
-          <p className="text-danger">
-            Couldn&apos;t reach the model API. Check that it&apos;s running and
-            that <code className="text-foreground">NEXT_PUBLIC_API_BASE_URL</code>{" "}
-            is set.
-          </p>
-        </Card>
-      ) : (
-        <>
-          {/* One team selector drives both the prediction and the stats below. */}
-          <label className="mb-8 flex max-w-sm flex-col gap-2">
-            <span className="text-sm text-muted">Select a team</span>
-            <select
-              value={team}
-              onChange={(e) => setTeam(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface-2 px-4 py-3 text-foreground outline-none focus:border-accent"
-            >
-              <option value="">Choose a team…</option>
-              {teams.map((t) => (
-                <option key={t} value={t}>
-                  {teamName(t)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* This week's prediction (season-gated). */}
-          {status && (
-            <>
-              {FORCE_IN_SEASON && !status.predictions_available && (
-                <p className="mb-3 text-xs text-accent">
-                  Dev preview: showing the picker out of season
-                  (NEXT_PUBLIC_FORCE_IN_SEASON).
-                </p>
-              )}
-              <Card>
-                {showPicker ? (
-                  <>
-                    <h2 className="mb-4 text-lg font-semibold">
-                      This week&apos;s prediction
-                    </h2>
-                    <PredictionPicker team={team} />
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-lg font-semibold">
-                      {status.reason === "off_season"
-                        ? "We're between seasons"
-                        : "Predictions aren't live yet"}
-                    </h2>
-                    <p className="mt-2 text-muted">{status.message}</p>
-                  </>
-                )}
-              </Card>
-            </>
-          )}
-
-          {/* Team stats are useful year-round, in-season and off. */}
-          <TeamStats team={team} />
-        </>
+      {!showPicks && (
+        <p className="mb-4 text-[13px] text-fg-2">
+          Picks start Week {minWeek}. The model needs three weeks of results.
+          Spreads below are the current market.
+        </p>
       )}
+
+      {slate.data && slate.data.games.length > 0 ? (
+        <Slate slate={slate.data} showPicks={showPicks} dimmed={slate.stale} />
+      ) : (
+        <p className="text-[13px] text-fg-2">No slate yet. Picks start Week {minWeek}.</p>
+      )}
+
+      {slate.data && showPicks && slate.data.games.length > 0 && (
+        <HowToRead game={largestGap(slate.data.games)} modelVersion={slate.data.model_version} />
+      )}
+    </>
+  );
+}
+
+function PageHeading({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex min-h-7 flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <h1 className="text-[20px] font-semibold leading-tight">{title}</h1>
+      {children}
     </div>
   );
 }
 
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-6">
-      {children}
-    </div>
-  );
+// The clearest example is the game where the model and the market disagree most.
+function largestGap(games: SlateGame[]): SlateGame {
+  return games.reduce((best, g) => (Math.abs(g.edge_pts) > Math.abs(best.edge_pts) ? g : best), games[0]);
+}
+
+function titleCase(upper: string): string {
+  return upper
+    .toLowerCase()
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
