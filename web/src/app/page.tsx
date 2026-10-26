@@ -1,8 +1,10 @@
 "use client";
 
+import HowToRead from "@/components/HowToRead";
 import RecordStrip from "@/components/RecordStrip";
 import Slate, { SlateLoading } from "@/components/Slate";
 import StatTile from "@/components/StatTile";
+import type { SlateGame } from "@/lib/api";
 import { useAppData } from "@/lib/data";
 import { formatPct, formatUnits, formatUpdatedDay } from "@/lib/format";
 
@@ -78,14 +80,8 @@ export default function Home() {
         <p className="text-[13px] text-fg-2">No slate yet. Picks start Week {minWeek}.</p>
       )}
 
-      {slate.data && (
-        <div className="mt-6 max-w-[680px] text-[13px] leading-6 text-fg-2">
-          <h2 className="label mb-2 text-fg-3">How to read this</h2>
-          <p>Spread is the market line, written on the favourite. Model line is the model&apos;s expected final margin written the same way: the regressor predicts each team&apos;s margin of victory from its form, with no market inputs.</p>
-          <p>Cover prob is the chance each side covers the market spread, derived from the gap between the model line and the spread. The two sides sum to 100.</p>
-          <p>Pick is the side with the higher cover probability. Below 52% it is marked as a lean.</p>
-          <p className="label mt-3 text-fg-3">{slate.data.model_version}</p>
-        </div>
+      {slate.data && showPicks && slate.data.games.length > 0 && (
+        <HowToRead game={largestGap(slate.data.games)} modelVersion={slate.data.model_version} />
       )}
     </>
   );
@@ -98,6 +94,11 @@ function PageHeading({ title, children }: { title: string; children?: React.Reac
       {children}
     </div>
   );
+}
+
+// The clearest example is the game where the model and the market disagree most.
+function largestGap(games: SlateGame[]): SlateGame {
+  return games.reduce((best, g) => (Math.abs(g.edge_pts) > Math.abs(best.edge_pts) ? g : best), games[0]);
 }
 
 function titleCase(upper: string): string {
