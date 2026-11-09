@@ -1,25 +1,24 @@
-"""Season win/loss backtest for the margin model (v2).
+"""Season track record for the site: "if you had followed the published picks".
 
-Answers the site's headline feature: "if you'd followed the model's picks this
-season, what would your record be?" For every game of the latest season, the
-model predicts each side's cover probability at the market spread, picks the
-higher-probability side, and is graded against the actual margin from the schedule.
+Grades the append-only picks log (pipeline/picks_log) against final scores
+from the nflverse schedule. No model runs here: a pick is whatever was logged
+before kickoff, at the line logged with it, by the model version logged with
+it. So neither a data refresh nor a model change can rewrite the record.
 
-Methodology (kept transparent and surfaced in the output JSON):
-  * One pick per GAME (sides are paired; never both sides of the same game).
-  * Pushes (neither side covers) are excluded from the record entirely;
-    a real sportsbook refunds them.
-  * Picks start at `MIN_WEEK` (matches the site's "come back for Week 4" rule).
+Methodology (also written into the output JSON):
+  * One pick per game: the side with the higher cover probability at the
+    line on the day the pick was logged.
+  * Pushes are excluded from the record; a sportsbook refunds them.
+  * Picks start at `MIN_WEEK` (the site's "picks start Week 4" rule).
   * Units assume flat -110 bets: a win pays +0.909u, a loss -1.0u.
-  * Features are `_shifted` (built from prior weeks), so this is an honest
-    walk-forward backtest with no leakage — same accounting the research
-    lockbox validation used (research/xgboost/lockbox_2025.py).
 
-Writes track_record.json, consumed by the API's /track-record endpoint.
+Runs after the Wednesday data refresh and every morning in season (daily
+results job), so finals reach the site the day after games.
+
+Writes track_record.json, served by the API's /track-record endpoint.
 
 Usage:
-    python -m pipeline.backtest                       # local CSV + local model
-    DATA_PATH=s3://nfl.data/nfl_current_data.csv python -m pipeline.backtest
+    python -m pipeline.backtest
 """
 
 from __future__ import annotations
@@ -28,27 +27,18 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
-from pipeline.margin_model import (
-    DEFAULT_BUNDLE_PATH,
-    attach_matchup_features,
-    load_bundle,
-    load_schedule,
-    pair_games,
-    predict_cover,
-)
+from pipeline.margin_model import DEFAULT_BUNDLE_PATH, load_bundle, load_schedule
+from pipeline.picks_log import MIN_WEEK, load_log
 
 ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_PATH = ROOT / "api" / "feature_manifest_margin_v2.json"
 DATA_PATH = os.getenv("DATA_PATH", str(ROOT / "nfl_current_data.csv"))
 MODEL_PATH = os.getenv("MODEL_PATH", str(DEFAULT_BUNDLE_PATH))
 OUTPUT_PATH = os.getenv("TRACK_RECORD_PATH", str(ROOT / "api" / "track_record.json"))
 # When set, also upload the result here so the API can serve it without a redeploy.
 OUTPUT_S3_URI = os.getenv("TRACK_RECORD_S3_URI", "")
 
-MIN_WEEK = int(os.getenv("MIN_WEEK", "4"))
 WIN_PAYOUT = 100 / 110  # flat -110 odds
 
 
@@ -59,123 +49,104 @@ def load_data() -> pd.DataFrame:
             "key": os.getenv("AWS_ACCESS_KEY_ID"),
             "secret": os.getenv("AWS_SECRET_ACCESS_KEY"),
         }
-    df = pd.read_csv(DATA_PATH, storage_options=storage_options)
+    df = pd.read_csv(DATA_PATH, storage_options=storage_options, usecols=lambda c: c.lower() in ("season", "week"))
     df.columns = df.columns.str.lower()
     return df
 
 
 def build_track_record() -> dict:
-    manifest = json.loads(MANIFEST_PATH.read_text())
     df = load_data()
     bundle = load_bundle(MODEL_PATH)
-
     latest_season = int(df["season"].max())
     latest_week = int(df[df["season"] == latest_season]["week"].max())
-    season = df[(df["season"] == latest_season) & (df["week"] >= MIN_WEEK)].copy()
-    # Grade from the schedule, not the file's is_cover: the weekly pull writes
-    # the coming week's rows before kickoff with is_cover 0 on both sides, and
-    # that flag never updates for games played after the pull.
-    played = load_schedule([latest_season]).dropna(subset=["margin"])
-    season = season.merge(
-        played[["season", "week", "team", "margin", "points_for"]], on=["season", "week", "team"]
-    )
-    season["covered"] = np.sign(season["margin"] + season["spread"])  # 1 cover, 0 push, -1 fail
-    season = season.sort_values(["week", "team"]).reset_index(drop=True)
-    season = attach_matchup_features(season)
 
-    if bundle is None:
-        # Deterministic stub so the plumbing can run without the artifact.
-        season["cover_proba"] = 1 / (1 + np.exp(-season["spread"].fillna(0.0) / 7.0))
-    else:
-        _, season["cover_proba"] = predict_cover(season, bundle)
+    full_log = load_log(latest_season)
+    log = full_log["picks"]
+    sched = load_schedule([latest_season]).dropna(subset=["margin"])
+    finals = {
+        (int(r.week), r.team): (int(r.points_against), int(r.points_for))  # (away, home)
+        for r in sched[sched["is_home"] == 1].itertuples()
+    }
 
-    # One pick per game: pair sides, take the higher-probability one.
-    pick_rows = []
-    games = []  # every graded game with its final score, for the site's result columns
-    pushes = 0
-    for week, wk in season.groupby("week", sort=True):
-        wk = wk.reset_index(drop=True)
-        for i, j in pair_games(wk):
-            ri, rj = wk.iloc[i], wk.iloc[j]
-            side = ri if float(ri["cover_proba"]) >= float(rj["cover_proba"]) else rj
-            home, away = (ri, rj) if int(ri["is_home"]) == 1 else (rj, ri)
-            game = {
-                "week": int(week),
-                "away": str(away["team"]),
-                "home": str(home["team"]),
-                "away_score": int(away["points_for"]),
-                "home_score": int(home["points_for"]),
-                "spread_home": float(home["spread"]),
-                "pick": str(side["team"]),
-            }
-            if ri["covered"] == 0:
-                pushes += 1
-                games.append({**game, "result": "push", "units": 0.0})
-                continue
-            won = bool(side["covered"] > 0)
-            units = WIN_PAYOUT if won else -1.0
-            games.append({**game, "result": "win" if won else "loss", "units": round(units, 3)})
-            pick_rows.append({
-                "week": int(week),
-                "team": str(side["team"]),
-                "won": won,
-                "units": units,
-            })
+    games = []  # every graded game with its final score
+    for p in sorted(log, key=lambda p: (p["week"], p["home"])):
+        final = finals.get((p["week"], p["home"]))
+        if final is None:
+            continue  # not played yet
+        away_score, home_score = final
+        diff = home_score - away_score + p["spread_home"]
+        if diff == 0:
+            result, units = "push", 0.0
+        else:
+            covered = p["home"] if diff > 0 else p["away"]
+            result = "win" if covered == p["pick"] else "loss"
+            units = WIN_PAYOUT if result == "win" else -1.0
+        games.append({
+            "week": p["week"], "away": p["away"], "home": p["home"],
+            "away_score": away_score, "home_score": home_score,
+            "spread_home": p["spread_home"], "pick": p["pick"], "p_pick": p["p_pick"],
+            "model_version": p["model_version"],
+            "result": result, "units": round(units, 3),
+        })
 
-    picks = pd.DataFrame(pick_rows, columns=["week", "team", "won", "units"])
-
-    wins = int(picks["won"].sum()) if len(picks) else 0
-    losses = int(len(picks) - wins)
-    total = wins + losses
-    win_pct = round(wins / total, 4) if total else 0.0
-    total_units = round(float(picks["units"].sum()), 2) if total else 0.0
-    roi = round(total_units / total, 4) if total else 0.0
+    decided = [g for g in games if g["result"] != "push"]
+    wins = sum(g["result"] == "win" for g in decided)
+    losses = len(decided) - wins
+    total_units = round(sum(g["units"] for g in decided), 2)
 
     # Week-by-week cumulative curve for the equity chart on the site.
     weekly = []
-    cum_units = 0.0
     cum_w = cum_l = 0
-    for week, grp in picks.groupby("week"):
-        w = int(grp["won"].sum())
-        l = int(len(grp) - w)
+    cum_units = 0.0
+    for week in sorted({g["week"] for g in decided}):
+        wk = [g for g in decided if g["week"] == week]
+        w = sum(g["result"] == "win" for g in wk)
         cum_w += w
-        cum_l += l
-        cum_units += float(grp["units"].sum())
-        weekly.append(
-            {
-                "week": int(week),
-                "wins": w,
-                "losses": l,
-                "cumulative_wins": cum_w,
-                "cumulative_losses": cum_l,
-                "cumulative_units": round(cum_units, 2),
-            }
-        )
+        cum_l += len(wk) - w
+        cum_units += sum(g["units"] for g in wk)
+        weekly.append({
+            "week": week, "wins": w, "losses": len(wk) - w,
+            "cumulative_wins": cum_w, "cumulative_losses": cum_l,
+            "cumulative_units": round(cum_units, 2),
+        })
+
+    # Which model made the picks, and from which week.
+    models = []
+    for p in sorted(log, key=lambda p: p["week"]):
+        if not models or models[-1]["version"] != p["model_version"]:
+            models.append({
+                "version": p["model_version"], "from_week": p["week"],
+                **full_log.get("models", {}).get(p["model_version"], {}),
+            })
 
     return {
         "season": latest_season,
         "latest_week": latest_week,
         "generated_at": pd.Timestamp.now("UTC").isoformat(),
         "is_stub": bundle is None,
-        "model_version": manifest["version"],
+        "model_version": bundle["version"] if bundle else (models[-1]["version"] if models else None),
+        "models": models,
         "methodology": {
-            "pick_rule": "one pick per game: the side with the higher predicted "
-                         "cover probability at the market spread",
+            "pick_rule": "one pick per game: the side with the higher cover probability, "
+                         "logged before kickoff at that day's line and never changed",
             "min_week": MIN_WEEK,
             "odds_assumption": "flat -110 (win pays +0.909u, loss -1.0u)",
-            "pick_unit": "one game (sides are paired; pushes excluded/refunded)",
+            "pick_unit": "one game (pushes excluded/refunded)",
         },
         "record": {
             "wins": wins,
             "losses": losses,
-            "pushes": pushes,
-            "total_picks": total,
-            "win_pct": win_pct,
+            "pushes": len(games) - len(decided),
+            "total_picks": len(decided),
+            "win_pct": round(wins / len(decided), 4) if decided else 0.0,
             "total_units": total_units,
-            "roi": roi,
+            "roi": round(total_units / len(decided), 4) if decided else 0.0,
         },
         "weekly": weekly,
         "games": games,
+        # The current week's logged picks, played or not, so the slate shows
+        # exactly what was published even after a data refresh or model change.
+        "logged": [p for p in log if p["week"] == latest_week],
     }
 
 
@@ -196,8 +167,7 @@ def main() -> None:
         )
         print(f"Uploaded track record to {OUTPUT_S3_URI}")
     r = record["record"]
-    tag = " (STUB MODEL)" if record["is_stub"] else ""
-    print(f"Wrote {OUTPUT_PATH}{tag}")
+    print(f"Wrote {OUTPUT_PATH}")
     print(
         f"  {record['season']} season: {r['wins']}-{r['losses']}-{r['pushes']}p "
         f"({r['win_pct']*100:.1f}%), {r['total_units']:+.2f}u, ROI {r['roi']*100:+.1f}%"

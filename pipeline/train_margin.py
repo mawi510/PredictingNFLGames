@@ -1,28 +1,21 @@
 """
-Production training job for the margin model (model v2).
+Production training job for the margin model (v3).
 
-Reads the curated features parquet, trains an XGBRegressor with target = margin,
-calibrates a Student-t residual distribution on the most recent season (OOS),
-then refits on all data and persists a deploy-ready bundle.
+Model: ridge regression on standardized home-minus-away feature differences,
+predicting the home team's final margin. Chosen in research/margin_v3 by a
+rule fixed in advance (lowest out-of-sample margin RMSE, walk-forward
+2019-2025) over the v2 form (one XGBoost row per team), whose line was about
+half as wide as the market's.
 
-Output bundle (model_margin_v2.pkl):
-    {
-        "regressor":      fitted xgboost.XGBRegressor,
-        "feature_names":  ordered list of 44 feature names,
-        "scale_t":        Student-t scale (residual scale on OOS holdout),
-        "nu_t":           Student-t degrees of freedom on OOS holdout,
-        "sigma_normal":   Normal-fit residual std (kept for parity / display),
-        "version":        semver string (margin-v2.YYYY.MM),
-        "trained_at":     ISO timestamp,
-        "training_seasons": list[int],
-        "calib_season":   int (the season held out for residual calibration),
-        "metadata":       free-form (dropped features, training row count, etc.),
-    }
+Steps:
+  1. Build one row per game from the curated team-week features.
+  2. Walk forward (train on seasons < s, predict s) to get out-of-sample lines.
+     From those, fit the cover-probability scale on actual cover outcomes
+     (weeks >= MIN_WEEK, pushes excluded) and record the margin residual sd.
+  3. Refit on every season and write the bundle.
 
-The bundle is intentionally a dict, NOT the raw sklearn model. The API loader
-needs to: (a) verify the bundle structure (version + feature contract),
-(b) call regressor.predict() on a row in feature_names order, (c) apply
-scipy.stats.t.cdf((mu + spread) / scale_t, df=nu_t) at inference time.
+Output: api/model_margin_v3.json, a plain JSON bundle the API reads directly
+(feature order, coefficients, feature sds and means, scale_t, nu_t, version).
 
 Run:
     python -m pipeline.train_margin
@@ -34,118 +27,148 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
-import xgboost as xgb
-from scipy import stats
+from scipy import optimize, stats
+from sklearn.linear_model import RidgeCV
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
-from pipeline.margin_model import load_schedule  # noqa: E402
-FEATURES_PARQUET = REPO / "research" / "xgboost" / "features_2025.parquet"
-MODEL_OUT = REPO / "api" / "model_margin_v2.pkl"
-MANIFEST_OUT = REPO / "api" / "feature_manifest_margin_v2.json"
+from pipeline.margin_model import (  # noqa: E402
+    DEFAULT_BUNDLE_PATH,
+    attach_opponent,
+    game_margins,
+    load_schedule,
+)
 
-ID_COLS = ["season", "week", "team", "is_cover"]
-# Market-derived features dropped so the model is forced to learn team-strength signal.
-# spread itself is also dropped from features and used only in the final
-# Phi((mu + spread)/sigma) cover-probability calculation.
+FEATURES_PARQUET = REPO / "research" / "xgboost" / "features_2025.parquet"
+
+ID_COLS = ["season", "week", "team", "is_cover", "opponent"]
+# Market-derived columns are never model inputs. The spread is used only to
+# turn a predicted margin into a cover probability.
 DROP_FEATS = [
     "spread", "spread_odds", "moneyline", "exp_total_points",
     "over_odds", "under_odds", "is_fav",
 ]
-
-XGB_REG_KW = dict(
-    n_estimators=400, max_depth=4, learning_rate=0.03,
-    subsample=0.85, colsample_bytree=0.85, reg_lambda=1.0,
-    objective="reg:squarederror", eval_metric="rmse",
-    tree_method="hist", random_state=7, n_jobs=4,
-)
+ALPHAS = np.logspace(0, 4, 13)
+NU_T = 50.0          # near-normal tails; kept as a parameter of the cover formula
+MIN_WEEK = 4         # the site publishes picks from week 4
 
 
-def load_margins() -> pd.DataFrame:
-    """Actual game margins from the nflverse schedule (training target)."""
-    sched = load_schedule(range(2018, datetime.now(timezone.utc).year + 1))
-    return sched.dropna(subset=["margin"])[["season", "week", "team", "margin"]]
+def load_games() -> tuple[pd.DataFrame, list[str], np.ndarray]:
+    """One row per played game with home/away feature blocks.
+
+    Returns (games, feature names, team-level feature means).
+    """
+    df = attach_opponent(pd.read_parquet(FEATURES_PARQUET))
+    feats = [c for c in df.columns if c not in ID_COLS and c not in DROP_FEATS]
+    sched = load_schedule(df["season"].unique())[["season", "week", "team", "margin"]]
+    df = df.merge(sched, on=["season", "week", "team"], how="inner").dropna(subset=["margin"])
+    home, away = df[df["is_home"] == 1], df[df["is_home"] == 0]
+    g = home.merge(
+        away, left_on=["season", "week", "opponent"], right_on=["season", "week", "team"],
+        suffixes=("_h", "_a"),
+    )
+    games = pd.DataFrame({
+        "season": g["season"].astype(int), "week": g["week"].astype(int),
+        "spread_home": g["spread_h"].astype(float), "margin_home": g["margin_h"].astype(float),
+    })
+    games["_h"] = list(g[[f + "_h" for f in feats]].to_numpy(dtype=float))
+    games["_a"] = list(g[[f + "_a" for f in feats]].to_numpy(dtype=float))
+    means = np.nanmean(df[feats].to_numpy(dtype=float), axis=0)
+    return games, feats, means
+
+
+def fit_ridge(games: pd.DataFrame) -> dict:
+    """Fit on both orientations of every game so the model is antisymmetric."""
+    D = np.stack(games["_h"]) - np.stack(games["_a"])
+    y = games["margin_home"].to_numpy()
+    sd = np.nanstd(np.vstack([D, -D]), axis=0)
+    sd[sd == 0] = 1.0
+    Z = np.nan_to_num(D / sd)
+    r = RidgeCV(alphas=ALPHAS, fit_intercept=False).fit(np.vstack([Z, -Z]), np.concatenate([y, -y]))
+    return {"coef": r.coef_.tolist(), "feature_sd": sd.tolist(), "alpha": float(r.alpha_)}
+
+
+def out_of_sample_lines(games: pd.DataFrame) -> pd.DataFrame:
+    """Walk forward: each season's lines come from a fit on earlier seasons."""
+    seasons = sorted(games["season"].unique())
+    parts = []
+    for s in seasons[1:]:
+        fit = fit_ridge(games[games["season"] < s])
+        test = games[games["season"] == s].copy()
+        test["line"] = game_margins(np.stack(test["_h"]), np.stack(test["_a"]), fit)
+        parts.append(test)
+    return pd.concat(parts, ignore_index=True)
+
+
+def fit_cover_scale(oos: pd.DataFrame) -> tuple[float, int]:
+    """Scale s that maximizes the likelihood of the actual cover outcomes under
+    P(home covers) = t.cdf((line + spread) / s)."""
+    d = oos[oos["week"] >= MIN_WEEK]
+    res = np.sign(d["margin_home"] + d["spread_home"]).to_numpy()
+    gap = (d["line"] + d["spread_home"]).to_numpy()[res != 0]
+    y = (res[res != 0] > 0).astype(float)
+
+    def nll(s: float) -> float:
+        p = np.clip(stats.t.cdf(gap / s, NU_T), 1e-9, 1 - 1e-9)
+        return -float(np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+    best = optimize.minimize_scalar(nll, bounds=(5.0, 400.0), method="bounded")
+    print(f"Cover scale {best.x:.1f} on {len(y):,} out-of-sample games "
+          f"(log loss {best.fun:.4f}; coin flip {np.log(2):.4f})")
+    return float(best.x), int(len(y))
 
 
 def main() -> None:
-    feat_df = pd.read_parquet(FEATURES_PARQUET)
-    df = feat_df.merge(load_margins(), on=["season", "week", "team"], how="inner")
-    feat = [c for c in df.columns
-            if c not in ID_COLS + ["margin"] and c not in DROP_FEATS]
-    print(f"Training rows: {len(df):,}  | features: {len(feat)}")
+    games, feats, means = load_games()
+    seasons = sorted(int(s) for s in games["season"].unique())
+    print(f"{len(games):,} games, seasons {seasons[0]}-{seasons[-1]}, {len(feats)} features")
 
-    seasons = sorted(df["season"].unique())
-    if len(seasons) < 2:
-        raise RuntimeError("Need at least 2 seasons of data to calibrate residuals.")
-    calib_season = seasons[-1]
-    training_seasons = seasons
+    oos = out_of_sample_lines(games)
+    resid = oos["margin_home"] - oos["line"]
+    market_rmse = float(np.sqrt(np.mean((oos["margin_home"] + oos["spread_home"]) ** 2)))
+    print(f"Out-of-sample {int(oos.season.min())}-{int(oos.season.max())}: RMSE {np.sqrt(np.mean(resid**2)):.2f} "
+          f"(market {market_rmse:.2f}), line sd {oos['line'].std():.2f} "
+          f"(market {oos['spread_home'].std():.2f})")
+    scale, n_cal = fit_cover_scale(oos)
 
-    # 1) OOS residual calibration: fit on everything before the calib season,
-    #    score on the calib season, fit Student-t to those residuals.
-    cal_train = df[df["season"] < calib_season]
-    cal_test = df[df["season"] == calib_season]
-    m_cal = xgb.XGBRegressor(**XGB_REG_KW)
-    m_cal.fit(cal_train[feat], cal_train["margin"])
-    resid = cal_test["margin"].values - m_cal.predict(cal_test[feat])
-    nu, _, scale = stats.t.fit(resid, floc=0)
-    nu = float(np.clip(nu, 3.0, 50.0))
-    sigma_normal = float(np.std(resid))
-    print(f"OOS calibration on {calib_season}: nu={nu:.3f}, scale={scale:.3f}, "
-          f"sigma_normal={sigma_normal:.3f}, n_resid={len(resid)}")
-
-    # 2) Final fit on ALL data (the model the API will serve)
-    final = xgb.XGBRegressor(**XGB_REG_KW)
-    final.fit(df[feat], df["margin"])
-    print(f"Final model trained on {len(df):,} rows across seasons {training_seasons}")
-
-    # 3) Bundle + persist
-    version = f"margin-v2.{datetime.now(timezone.utc).strftime('%Y.%m')}"
+    fit = fit_ridge(games)
+    now = datetime.now(timezone.utc)
     bundle = {
-        "regressor": final,
-        "feature_names": feat,
-        "scale_t": float(scale),
-        "nu_t": float(nu),
-        "sigma_normal": float(sigma_normal),
-        "version": version,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
-        "training_seasons": [int(s) for s in training_seasons],
-        "calib_season": int(calib_season),
-        "metadata": {
-            "dropped_features": DROP_FEATS,
-            "n_training_rows": int(len(df)),
-            "n_calib_resid": int(len(resid)),
-            "xgb_params": XGB_REG_KW,
-        },
-    }
-    MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(bundle, MODEL_OUT)
-    print(f"Wrote bundle -> {MODEL_OUT}  ({MODEL_OUT.stat().st_size/1024:.1f} KB)")
-
-    # 4) Manifest: input contract for the API
-    manifest = {
-        "version": version,
-        "model_type": "margin_regressor_xgb",
+        "version": f"margin-v3.{now.strftime('%Y.%m')}",
+        "model_type": "ridge_feature_diff",
         "description": (
-            "Margin model v2. Regressor predicts E[team_score - opp_score]; "
-            "cover probability is computed at inference via "
-            "Student-t CDF((mu_hat + spread) / scale_t, df=nu_t)."
+            "Margin model v3. Ridge regression on standardized home-minus-away feature "
+            "differences predicts the home margin; a feature missing for either team "
+            "contributes 0. Cover probability = t.cdf((margin + spread) / scale_t, nu_t), "
+            "with scale_t fitted on out-of-sample cover outcomes."
         ),
-        "n_features": len(feat),
-        "features": feat,
+        "features": feats,
+        "n_features": len(feats),
+        "coef": fit["coef"],
+        "feature_sd": fit["feature_sd"],
+        "feature_mean": means.tolist(),
+        "alpha": fit["alpha"],
+        "scale_t": scale,
+        "nu_t": NU_T,
+        "margin_resid_sd": float(np.std(resid)),
         "dropped_features": DROP_FEATS,
         "spread_is_external": True,
-        "training_seasons": [int(s) for s in training_seasons],
-        "calib_season": int(calib_season),
-        "scale_t": float(scale),
-        "nu_t": float(nu),
-        "sigma_normal": float(sigma_normal),
-        "trained_at": bundle["trained_at"],
+        "training_seasons": seasons,
+        "calibration": {
+            "source": f"walk-forward out-of-sample lines, seasons {seasons[1]}-{seasons[-1]}, "
+                      f"weeks {MIN_WEEK}+, pushes excluded",
+            "n_games": n_cal,
+        },
+        "trained_at": now.isoformat(),
     }
-    MANIFEST_OUT.write_text(json.dumps(manifest, indent=2))
-    print(f"Wrote manifest -> {MANIFEST_OUT}")
+    DEFAULT_BUNDLE_PATH.write_text(json.dumps(bundle, indent=1))
+    print(f"Wrote {DEFAULT_BUNDLE_PATH}  (alpha {fit['alpha']:.0f}, version {bundle['version']})")
+    top = sorted(zip(feats, fit["coef"]), key=lambda t: -abs(t[1]))[:8]
+    print("Largest coefficients (points per sd of difference):")
+    for name, c in top:
+        print(f"  {c:+.2f}  {name}")
 
 
 if __name__ == "__main__":

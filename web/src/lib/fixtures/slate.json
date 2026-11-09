@@ -1,10 +1,10 @@
 {
   "season": 2026,
   "week": 9,
-  "generated_at": "2026-11-09T13:42:40.872074+00:00",
-  "model_version": "margin-v2.2026.10",
+  "generated_at": "2026-11-09T14:04:49.947982+00:00",
+  "model_version": "margin-v3.2026.11",
   "is_stub": false,
-  "scale_t": 13.757953955031446,
+  "scale_t": 67.93514218256308,
   "nu_t": 50.0,
   "games": [
     {
@@ -20,6 +20,9 @@
       "pick": "BAL",
       "p_pick": 0.7543,
       "edge_pts": 9.54,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 33,
         "home_score": 10,
@@ -40,6 +43,9 @@
       "pick": "ATL",
       "p_pick": 0.5339,
       "edge_pts": 1.18,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 34,
         "home_score": 17,
@@ -60,6 +66,9 @@
       "pick": "CAR",
       "p_pick": 0.564,
       "edge_pts": 2.23,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 26,
         "home_score": 21,
@@ -80,6 +89,9 @@
       "pick": "IND",
       "p_pick": 0.5344,
       "edge_pts": 1.19,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 27,
         "home_score": 23,
@@ -100,6 +112,9 @@
       "pick": "NYJ",
       "p_pick": 0.6237,
       "edge_pts": 4.36,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 12,
         "home_score": 35,
@@ -120,6 +135,9 @@
       "pick": "MIA",
       "p_pick": 0.5499,
       "edge_pts": 1.73,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 19,
         "home_score": 9,
@@ -140,6 +158,9 @@
       "pick": "NO",
       "p_pick": 0.5033,
       "edge_pts": 0.12,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 22,
         "home_score": 23,
@@ -160,6 +181,9 @@
       "pick": "NYG",
       "p_pick": 0.5272,
       "edge_pts": 0.94,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 19,
         "home_score": 11,
@@ -180,6 +204,9 @@
       "pick": "WAS",
       "p_pick": 0.6218,
       "edge_pts": 4.29,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 20,
         "home_score": 13,
@@ -200,6 +227,9 @@
       "pick": "LAC",
       "p_pick": 0.6103,
       "edge_pts": 3.88,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 44,
         "home_score": 22,
@@ -220,6 +250,9 @@
       "pick": "LV",
       "p_pick": 0.6149,
       "edge_pts": 4.04,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 17,
         "home_score": 38,
@@ -240,6 +273,9 @@
       "pick": "GB",
       "p_pick": 0.5283,
       "edge_pts": 0.98,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 45,
         "home_score": 27,
@@ -260,6 +296,9 @@
       "pick": "ARI",
       "p_pick": 0.6282,
       "edge_pts": 4.52,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 3,
         "home_score": 17,
@@ -280,6 +319,9 @@
       "pick": "TB",
       "p_pick": 0.5846,
       "edge_pts": 2.95,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": {
         "away_score": 24,
         "home_score": 27,
@@ -300,6 +342,9 @@
       "pick": "MIN",
       "p_pick": 0.6441,
       "edge_pts": 5.11,
+      "pick_model_version": "margin-v2.2026.10",
+      "scale_t": 13.757953955031446,
+      "nu_t": 50.0,
       "result": null
     }
   ]

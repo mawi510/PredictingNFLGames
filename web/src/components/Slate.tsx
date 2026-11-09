@@ -71,7 +71,9 @@ export default function Slate({
               game={g}
               showPicks={showPicks}
               dimmed={dimmed}
-              lineModel={lineModel}
+              // A pick logged by an earlier model version carries that model's
+              // own line parameters; the slider uses them for that row.
+              lineModel={g.scale_t && g.nu_t ? { scale: g.scale_t, nu: g.nu_t } : lineModel}
             />
           ))}
         </section>

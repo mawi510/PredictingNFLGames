@@ -1,15 +1,17 @@
 """FastAPI service for the NFL spread-cover model.
 
-Serves live predictions from the margin model (v2): an XGBoost regressor
-predicts the expected scoring margin from 44 team-form features (no market
-inputs), and the cover probability is computed at the market spread via a
-Student-t CDF calibrated on out-of-sample residuals:
+Serves live predictions from the margin model (v3): a ridge regression on the
+differences between the two teams' 44 form features predicts the home margin
+(this week's line is not an input). The cover probability is computed at the
+market spread:
 
     P(cover) = t.cdf((predicted_margin + spread) / scale_t, df=nu_t)
 
-Inputs are validated against a versioned feature manifest so a pipeline column
-change can't silently corrupt inference. Missing features stay NaN — the
-model handles them natively (do not fill with 0).
+with scale_t fitted on out-of-sample cover outcomes (pipeline/train_margin.py).
+
+Inputs are validated against the bundle's feature list so a pipeline column
+change can't silently corrupt inference. A missing feature contributes nothing
+to the prediction.
 
 Endpoints:
     GET  /health        -> liveness + whether a real model is loaded
@@ -36,10 +38,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 API_DIR = Path(__file__).resolve().parent
-MANIFEST_PATH = API_DIR / "feature_manifest_margin_v2.json"
+MANIFEST_PATH = API_DIR / "model_margin_v3.json"  # the bundle doubles as the manifest
 # The model bundle is committed to the repo and baked into the image; no S3
 # pull needed at boot (unlike the old RF, which was too big to commit).
-MODEL_PATH = os.getenv("MODEL_PATH", str(API_DIR / "model_margin_v2.pkl"))
+MODEL_PATH = os.getenv("MODEL_PATH", str(API_DIR / "model_margin_v3.json"))
 TRACK_RECORD_PATH = os.getenv("TRACK_RECORD_PATH", str(API_DIR / "track_record.json"))
 # The weekly job writes the backtest here; the API reads it live (cached) so a
 # data refresh never requires an image rebuild/redeploy.
@@ -83,16 +85,33 @@ def load_manifest() -> dict:
 def load_model():
     """Load the model bundle, or return None so the API still boots for dev.
 
-    The bundle is a dict: {regressor (XGBRegressor), feature_names, scale_t,
-    nu_t, version, ...} written by pipeline/train_margin.py. When None,
-    /predict returns a clearly-labelled stub so the frontend and CI still work.
+    The bundle is plain JSON written by pipeline/train_margin.py: feature
+    order, ridge coefficients, feature sds and means, scale_t, nu_t, version.
+    When None, /predict returns a clearly-labelled stub so the frontend and CI
+    still work.
     """
     path = Path(MODEL_PATH)
     if not path.exists():
         return None
-    import joblib  # imported lazily so the stub path needs no ML deps
+    with open(path) as f:
+        return json.load(f)
 
-    return joblib.load(path)
+
+def _vector(features: dict, names: list) -> np.ndarray:
+    """Feature values in bundle order; missing or null -> NaN."""
+    return np.array(
+        [float(features[n]) if features.get(n) is not None else float("nan") for n in names],
+        dtype=float,
+    )
+
+
+def _margin(bundle: dict, team_features: dict, opp_features: dict) -> float:
+    """Predicted margin for a team against an opponent: the bundle's ridge on
+    standardized feature differences. A feature missing for either side adds 0."""
+    names = bundle["features"]
+    diff = _vector(team_features, names) - _vector(opp_features, names)
+    z = np.nan_to_num(diff / np.asarray(bundle["feature_sd"], dtype=float))
+    return float(z @ np.asarray(bundle["coef"], dtype=float))
 
 
 # --------------------------------------------------------------------------- #
@@ -101,10 +120,10 @@ def load_model():
 class PredictRequest(BaseModel):
     """Named feature map + market spread for a single team-week.
 
-    Keys must match the manifest's feature names. Missing or null features
-    stay NaN (the model handles them natively); unknown keys are rejected so
-    typos and stale pipelines surface loudly instead of silently shifting the
-    vector. The spread is NOT a model feature — it enters only in the final
+    Keys must match the bundle's feature names. Missing or null features add
+    nothing to the prediction; unknown keys are rejected so typos and stale
+    pipelines surface loudly instead of silently shifting the vector. The
+    spread is NOT a model feature: it enters only in the final
     cover-probability calculation.
     """
 
@@ -268,13 +287,6 @@ def predict(req: PredictRequest) -> PredictResponse:
             f"{unknown[:10]}{'...' if len(unknown) > 10 else ''}",
         )
 
-    # Build the vector in the manifest's exact order; missing/null -> NaN.
-    def _val(name: str) -> float:
-        v = req.features.get(name)
-        return float(v) if v is not None else float("nan")
-
-    vector = np.array([[_val(name) for name in expected]], dtype=float)
-
     bundle = load_model()
     if bundle is None:
         # Deterministic stub so the frontend has something to render in dev:
@@ -293,7 +305,10 @@ def predict(req: PredictRequest) -> PredictResponse:
 
     from scipy import stats  # lazy: keeps the stub path dependency-free
 
-    mu = float(bundle["regressor"].predict(vector)[0])
+    # One team on its own: its margin against a league-average opponent
+    # (the training mean of every feature). Game predictions use both teams.
+    average = dict(zip(bundle["features"], bundle["feature_mean"]))
+    mu = _margin(bundle, req.features, average)
     edge = mu + req.spread
     p_cover = float(stats.t.cdf(edge / bundle["scale_t"], df=bundle["nu_t"]))
     return PredictResponse(
@@ -391,20 +406,10 @@ def team_prediction(team: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Game-level prediction: one shared margin per game so the two sides' cover
-# probabilities sum to 1. (Each team's own row gives its own margin estimate;
-# the game margin is the average of the two views, which is also exactly the
-# quantity the backtest's "pick the higher-probability side" rule compares.)
+# Game-level prediction: the model predicts one margin per game from the
+# difference between the two teams' features, so the two sides' cover
+# probabilities sum to 1.
 # --------------------------------------------------------------------------- #
-def _predict_mu(bundle, features: dict) -> float:
-    names = load_manifest()["features"]
-    vector = np.array(
-        [[float(features[n]) if features.get(n) is not None else float("nan") for n in names]],
-        dtype=float,
-    )
-    return float(bundle["regressor"].predict(vector)[0])
-
-
 def _game_prediction(data: dict, team: str) -> Optional[dict]:
     """Prediction for `team` against its scheduled opponent, or None if the
     features file has no opponent for it (pre-refresh format or a bye)."""
@@ -420,7 +425,7 @@ def _game_prediction(data: dict, team: str) -> Optional[dict]:
         margin, scale, nu = 0.0, (manifest["scale_t"] or 13.0), (manifest["nu_t"] or 30.0)
         version, is_stub = f"stub-{manifest['version']}", True
     else:
-        margin = (_predict_mu(bundle, info["features"]) - _predict_mu(bundle, opp_info["features"])) / 2
+        margin = _margin(bundle, info["features"], opp_info["features"])
         scale, nu, version, is_stub = bundle["scale_t"], bundle["nu_t"], bundle["version"], False
 
     from scipy import stats
@@ -462,6 +467,51 @@ def _final_scores(season: int, week: int) -> dict:
     }
 
 
+def _logged_picks(season: int, week: int) -> dict:
+    """{(away, home): log entry} for the week's published picks, if any. Each
+    entry carries its model's scale_t / nu_t when the record lists them."""
+    try:
+        tr = track_record()
+    except HTTPException:
+        return {}
+    if tr.get("season") != season:
+        return {}
+    params = {m["version"]: m for m in tr.get("models", [])}
+    return {
+        (p["away"], p["home"]): {**p, **{k: params.get(p["model_version"], {}).get(k) for k in ("scale_t", "nu_t")}}
+        for p in tr.get("logged", [])
+        if p["week"] == week
+    }
+
+
+def _apply_logged(game: dict, entry: dict) -> None:
+    """Replace a live prediction with what was published for that game.
+
+    A pick is fixed when it is logged before kickoff. Later line moves in the
+    data and later model versions do not change it.
+    """
+    spread_home = entry["spread_home"]
+    margin_home = entry.get("margin_home", game["predicted_margin_home"])
+    home_is_pick = entry["pick"] == game["home"]
+    p_home = entry["p_pick"] if home_is_pick else round(1 - entry["p_pick"], 4)
+    game.update({
+        "spread_home": spread_home,
+        "favorite": game["home"] if spread_home < 0 else game["away"] if spread_home > 0 else None,
+        "spread_fav": -abs(spread_home),
+        "p_home": p_home,
+        "p_away": round(1 - p_home, 4),
+        "predicted_margin_home": margin_home,
+        "pick": entry["pick"],
+        "p_pick": entry["p_pick"],
+        "edge_pts": round(margin_home + spread_home if home_is_pick else -margin_home - spread_home, 2),
+        "pick_model_version": entry["model_version"],
+    })
+    # Line parameters of the model that made the pick, when it is not the
+    # current one, so a client recomputes this row with the right model.
+    if entry.get("scale_t") and entry.get("nu_t"):
+        game["scale_t"], game["nu_t"] = entry["scale_t"], entry["nu_t"]
+
+
 def _grade(game: dict, away_score: int, home_score: int) -> dict:
     """Grade a slate game against its own spread and pick."""
     diff = home_score - away_score + game["spread_home"]
@@ -479,6 +529,8 @@ def _grade(game: dict, away_score: int, home_score: int) -> dict:
 def slate() -> dict:
     """Every game of the current week: both sides, one shared cover probability.
 
+    A game whose pick is already in the log shows the logged pick, line and
+    probability (`pick_model_version` names the model that made it).
     Finished games carry a `result` (final score, who covered, pick result).
     `scale_t` and `nu_t` let a client recompute the cover probability at any
     other line: P(home covers) = t.cdf((predicted_margin_home + line) / scale_t, nu_t).
@@ -523,7 +575,12 @@ def slate() -> dict:
         )
     games.sort(key=lambda g: (g["kickoff"] is None, g["kickoff"] or "", g["home"]))
     scores = _final_scores(data["season"], week)
+    logged = _logged_picks(data["season"], week)
     for g in games:
+        g["pick_model_version"] = version
+        entry = logged.get((g["away"], g["home"]))
+        if entry:
+            _apply_logged(g, entry)
         final = scores.get((g["away"], g["home"]))
         g["result"] = _grade(g, *final) if final else None
     bundle = load_model()
