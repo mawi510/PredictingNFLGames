@@ -13,9 +13,10 @@ export function formatSpread(spread: number): string {
   return signed(spread, 1);
 }
 
-// Probabilities are whole percent, never coloured.
-export function formatPct(p: number): string {
-  return `${Math.round(p * 100)}%`;
+// Never coloured. Cover probabilities sit within a few points of 50, so
+// they take one decimal; whole percent would show most games as 50/50.
+export function formatPct(p: number, digits = 0): string {
+  return `${(p * 100).toFixed(digits)}%`;
 }
 
 export function formatUnits(units: number): string {

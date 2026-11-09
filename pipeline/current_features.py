@@ -1,6 +1,6 @@
 """Precompute per-team current-week features for the prediction API.
 
-The margin model (v2) needs a team's 44-feature vector plus the market spread
+The margin model needs each team's 44-feature vector plus the market spread
 to predict, but the slim API image has no pandas and shouldn't load the wide
 CSV. So this job — run weekly alongside the backtest — distills the latest
 week of data into a small JSON the API reads directly: for each team, its
@@ -29,7 +29,7 @@ import pandas as pd
 from pipeline.margin_model import attach_matchup_features, load_schedule
 
 ROOT = Path(__file__).resolve().parent.parent
-MANIFEST_PATH = ROOT / "api" / "feature_manifest_margin_v2.json"
+MANIFEST_PATH = ROOT / "api" / "model_margin_v3.json"  # bundle doubles as the feature manifest
 DATA_PATH = os.getenv("DATA_PATH", str(ROOT / "nfl_current_data.csv"))
 OUTPUT_PATH = os.getenv("CURRENT_FEATURES_PATH", str(ROOT / "api" / "current_features.json"))
 OUTPUT_S3_URI = os.getenv("CURRENT_FEATURES_S3_URI", "")

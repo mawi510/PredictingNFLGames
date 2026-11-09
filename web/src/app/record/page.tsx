@@ -37,7 +37,7 @@ export default function RecordPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Record" value={`${r.wins}-${r.losses}`} meta={since} />
-        <StatTile label="Win %" value={formatPct(r.win_pct)} meta="breakeven 52.4% at -110" />
+        <StatTile label="Win %" value={formatPct(r.win_pct, 1)} meta="breakeven 52.4% at -110" />
         <StatTile label="Units" value={formatUnits(r.total_units)} tone={r.total_units} meta="flat 1u per pick" />
         <StatTile label="ROI" value={formatRoi(r.roi)} tone={r.roi} meta="units per pick" />
         <StatTile label="Picks" value={String(r.total_picks)} meta="one per game" />
@@ -59,7 +59,7 @@ export default function RecordPage() {
       </Section>
 
       <Section title="Methodology">
-        <Methodology methodology={tr.methodology} />
+        <Methodology methodology={tr.methodology} models={tr.models} />
       </Section>
     </>
   );

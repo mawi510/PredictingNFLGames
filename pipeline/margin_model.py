@@ -1,21 +1,26 @@
-"""Shared utilities for serving/scoring the margin model (v2).
+"""Shared utilities for serving/scoring the margin model (v3).
 
-The margin model predicts E[team_score - opp_score] from 44 features (see
-api/feature_manifest_margin_v2.json) and converts to a cover probability at
-the market spread via a Student-t CDF calibrated on out-of-sample residuals:
+The margin model is a ridge regression on the differences between the two
+teams' features (home minus away, each divided by its training sd; a feature
+missing for either team contributes nothing). It predicts the home team's
+final margin directly, so the two sides of a game share one number:
 
-    P(cover) = t.cdf((mu_hat + spread) / scale_t, df=nu_t)
+    margin_home = sum_i coef_i * (f_home_i - f_away_i) / sd_i
 
-Two of its features are opponent-relative and don't exist as columns in the
-wide weekly CSV. The CSV has no opponent column either, so attach_opponent()
-joins it from the nflverse schedule by (season, week, team), and pair_games()
-pairs the two sides of each game from that column for per-game pick
-accounting. (Pairing used to match "opposite spread + opposite is_home"
-within a week, which cross-paired teams from different games whenever two
-games in a week shared a spread.)
+No market input. The spread enters only when a margin is turned into a cover
+probability:
 
-Missing feature values stay NaN (XGBoost handles them natively); do NOT
-fill with 0 (that was the old RandomForest convention).
+    P(home covers) = t.cdf((margin_home + spread_home) / scale_t, df=nu_t)
+
+`scale_t` is fitted on actual cover outcomes of out-of-sample predictions,
+not on the margin residuals. It is several times the residual sd because the
+market line already holds most of what the model knows; using the residual sd
+gave probabilities that scored worse than a coin flip (research/margin_v3).
+
+Two features are opponent-relative and are not columns in the wide weekly
+CSV. The CSV has no opponent column either, so attach_opponent() joins it from
+the nflverse schedule by (season, week, team), and pair_games() pairs the two
+sides of each game from that column.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BUNDLE_PATH = ROOT / "api" / "model_margin_v2.pkl"
+DEFAULT_BUNDLE_PATH = ROOT / "api" / "model_margin_v3.json"
 
 MATCHUP_FEATURES = {
     "passing_epa_minus_opp_passing_epa_allowed": (
@@ -47,13 +52,14 @@ _schedule_cache: dict[tuple[int, ...], pd.DataFrame] = {}
 
 
 def load_bundle(path: str | Path = DEFAULT_BUNDLE_PATH):
-    """Load the deploy bundle dict, or None if absent (stub/dev mode)."""
+    """Load the model bundle (plain JSON: coefficients, scales, feature order),
+    or None if absent (stub/dev mode)."""
     path = Path(path)
     if not path.exists():
         return None
-    import joblib
+    import json
 
-    return joblib.load(path)
+    return json.loads(path.read_text())
 
 
 def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
@@ -146,14 +152,48 @@ def attach_matchup_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def predict_cover(df: pd.DataFrame, bundle) -> tuple[np.ndarray, np.ndarray]:
-    """(mu_hat, p_cover) per row. df must contain the bundle's features + spread."""
+def standardized_diffs(f_home: np.ndarray, f_away: np.ndarray, sd: np.ndarray) -> np.ndarray:
+    """(home - away) / sd per feature; missing on either side -> 0 (no information)."""
+    return np.nan_to_num((np.asarray(f_home, dtype=float) - np.asarray(f_away, dtype=float)) / sd)
+
+
+def game_margins(f_home: np.ndarray, f_away: np.ndarray, bundle: dict) -> np.ndarray:
+    """Predicted home margin for each game. Rows are games, columns are the
+    bundle's features in order."""
+    z = standardized_diffs(f_home, f_away, np.asarray(bundle["feature_sd"], dtype=float))
+    return z @ np.asarray(bundle["coef"], dtype=float)
+
+
+def cover_probability(margin, spread, bundle: dict):
+    """P(a team covers) given its predicted margin and its own spread."""
     from scipy import stats
 
-    X = df.reindex(columns=bundle["feature_names"]).astype(float)
-    mu = bundle["regressor"].predict(X)
-    p = stats.t.cdf(
-        (mu + df["spread"].to_numpy(dtype=float)) / bundle["scale_t"],
+    return stats.t.cdf(
+        (np.asarray(margin, dtype=float) + np.asarray(spread, dtype=float)) / bundle["scale_t"],
         df=bundle["nu_t"],
     )
+
+
+def predict_cover(df: pd.DataFrame, bundle: dict) -> tuple[np.ndarray, np.ndarray]:
+    """(margin, p_cover) per team-week row, from that team's side of its game.
+
+    df needs season, week, team, opponent, is_home, spread and the bundle's
+    features. The two rows of a game get opposite margins and probabilities
+    that sum to 1. Rows whose opponent is not in the frame get NaN.
+    """
+    feats = bundle["features"]
+    mu = np.full(len(df), np.nan)
+    pos = {idx: k for k, idx in enumerate(df.index)}
+    for (_, _), wk in df.groupby(["season", "week"], sort=False):
+        pairs = pair_games(wk)
+        if not pairs:
+            continue
+        X = wk[feats].to_numpy(dtype=float)
+        homes = wk["is_home"].to_numpy()
+        hi = np.array([i if homes[i] == 1 else j for i, j in pairs])
+        ai = np.array([j if homes[i] == 1 else i for i, j in pairs])
+        m = game_margins(X[hi], X[ai], bundle)
+        mu[[pos[wk.index[k]] for k in hi]] = m
+        mu[[pos[wk.index[k]] for k in ai]] = -m
+    p = cover_probability(mu, df["spread"].to_numpy(dtype=float), bundle)
     return mu, p

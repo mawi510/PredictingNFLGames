@@ -11,9 +11,9 @@ import PickBadge from "./PickBadge";
 // One-line layout from 1024px up. Team columns flex; the numeric columns are
 // fixed so every number lines up down the page. Fixed widths plus gaps must
 // stay under the narrowest lg viewport or the last column spills out of the
-// table: 72 + 176 + 128 + 88 + 5 gaps of 16 + 2 x 140 minimum = 824px.
+// table: 72 + 196 + 128 + 88 + 5 gaps of 16 + 2 x 140 minimum = 844px.
 export const ROW_COLS =
-  "lg:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_72px_176px_128px_88px]";
+  "lg:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_72px_196px_128px_88px]";
 
 export interface LineModel {
   scale: number;

@@ -29,11 +29,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # One coherent, pinned set: xgboost 2.1.3 matches the version the
-          # margin-v2 bundle was pickled with; pandas <2.1 keeps nfl_data_py +
-          # numpy 1.23 happy.
+          # One coherent, pinned set; pandas <2.1 keeps nfl_data_py + numpy 1.23 happy.
           pip install \
-            numpy==1.23.5 scipy==1.9.3 xgboost==2.1.3 joblib==1.2.0 \
+            numpy==1.23.5 scipy==1.9.3 \
             "pandas>=1.5,<2.1" pyarrow requests s3fs boto3 nfl_data_py
 
       # The stats_player release for a brand-new season may not exist until week 1
@@ -46,12 +44,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: python current_nfl_data.py
 
+      # Before anything is graded: write this week's picks to the append-only
+      # log (committed below). The record is graded from that log, so later
+      # data refreshes and model changes cannot rewrite published picks.
+      - name: Log this week's picks
+        run: python -m pipeline.picks_log
+
       - name: Recompute season track record
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # Scores the committed margin-v2 bundle against the season and writes
-          # the result to S3 (the API serves it live — no redeploy needed).
+          # Grades the picks log against final scores and writes the result to
+          # S3 (the API serves it live; no redeploy needed).
           TRACK_RECORD_S3_URI: s3://nfl.data/track_record.json
         run: python -m pipeline.backtest
 
@@ -78,5 +82,6 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add -f nfl_current_data.csv
+          git add pipeline/picks_log
           git commit -m "Weekly data refresh" || echo "No changes to commit"
           git push

@@ -12,8 +12,9 @@ export default function CoverProbability({
   pAway: number;
   pick: string;
 }) {
-  const a = Math.round(pAway * 100);
-  const h = 100 - a;
+  // One decimal, and the two sides always sum to exactly 100.
+  const a = Math.round(pAway * 1000) / 10;
+  const h = Math.round((100 - a) * 10) / 10;
   return (
     <span className="num whitespace-nowrap text-[14px]">
       <Side team={away} pct={a} strong={pick === away} />
@@ -26,7 +27,7 @@ export default function CoverProbability({
 function Side({ team, pct, strong }: { team: string; pct: number; strong: boolean }) {
   return (
     <span className={strong ? "font-medium text-fg" : "text-fg-2"}>
-      <span className="font-mono text-[12px]">{team}</span> {pct}%
+      <span className="font-mono text-[12px]">{team}</span> {pct.toFixed(1)}%
     </span>
   );
 }

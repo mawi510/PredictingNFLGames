@@ -2,7 +2,7 @@ name: CI
 
 # Validates that changes still build and boot the model image before merge.
 # Builds from the PR's contents (no push) and smoke-tests the API with the
-# committed margin-v2 bundle (baked into the image; no AWS creds needed), so
+# committed margin-v3 bundle (baked into the image; no AWS creds needed), so
 # it also passes on fork PRs.
 on:
   pull_request:
@@ -45,11 +45,11 @@ jobs:
       - name: Smoke-test endpoints
         run: |
           set -e
-          echo "== /health (margin-v2 bundle loaded) =="
+          echo "== /health (margin-v3 bundle loaded) =="
           curl -fsS http://localhost:8000/health | tee /tmp/h.json
           grep -q '"n_features":44' /tmp/h.json
           grep -q '"model_loaded":true' /tmp/h.json
-          grep -q '"model_version":"margin-v2' /tmp/h.json
+          grep -q '"model_version":"margin-v3' /tmp/h.json
 
           echo "== /predict (valid -> 200, real prediction) =="
           code=$(curl -s -o /tmp/p.json -w "%{http_code}" -X POST http://localhost:8000/predict \

@@ -1,7 +1,6 @@
 # Model-serving API for ProMatchPredict.
 # Built by CI and deployed to EC2 via docker compose (see infra/).
-# Python 3.10: matches the weekly-data job's pinned stack (numpy 1.23.5 has no
-# constraint newer than cp310 here); xgboost 2.1.3 ships a cp310 wheel.
+# Python 3.10: matches the weekly-data job's pinned stack (numpy 1.23.5).
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -16,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
         -name "*.pyc" -delete \
     && pip uninstall -y pip setuptools wheel 2>/dev/null || true
 
-# App code + feature manifest + the committed margin-v2 model bundle (small
-# enough to live in the repo — no S3 pull at boot).
+# App code + the committed margin-v3 model bundle (a small JSON file; no S3
+# pull at boot).
 COPY api/ ./api/
 
 EXPOSE 8000

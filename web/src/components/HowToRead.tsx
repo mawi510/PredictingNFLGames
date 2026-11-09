@@ -12,8 +12,8 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
   const pickIsHome = game.pick === game.home;
   const other = pickIsHome ? game.away : game.home;
   const pickSpread = pickIsHome ? game.spread_home : -game.spread_home;
-  const pPick = formatPct(game.p_pick);
-  const pOther = formatPct(1 - game.p_pick);
+  const pPick = formatPct(game.p_pick, 1);
+  const pOther = formatPct(1 - game.p_pick, 1);
   const lean = game.p_pick < 0.52;
 
   const rows: [string, string, string][] = [
@@ -27,7 +27,7 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
     [
       "Model line",
       modelLine,
-      `The model's expected final margin, written the same way. It comes from each team's form; the market line is not an input.`,
+      `The model's expected final margin, written the same way. It comes from the gap between the two teams' form; this week's line is not an input.`,
     ],
     [
       "Gap",
@@ -37,7 +37,7 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
     [
       "Cover prob",
       `${game.pick} ${pPick} · ${other} ${pOther}`,
-      "How often a gap this size covers, given how far the model's past predictions missed. The two sides sum to 100.",
+      "How often a gap this size has covered, measured on past seasons of out-of-sample predictions. The two sides sum to 100.",
     ],
     [
       "Pick",

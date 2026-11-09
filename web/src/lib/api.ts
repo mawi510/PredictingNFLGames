@@ -53,6 +53,12 @@ export interface SlateGame {
   p_pick: number;
   edge_pts: number;
   result?: GameResult | null;
+  // The model version that made this pick. Differs from the slate's
+  // model_version only in the week a new model is deployed; the row then
+  // carries that model's own line parameters.
+  pick_model_version?: string;
+  scale_t?: number;
+  nu_t?: number;
 }
 
 export interface Slate {
@@ -108,6 +114,8 @@ export interface TrackRecord {
   is_stub: boolean;
   model_version: string;
   methodology: Methodology;
+  // Which model made the picks, and from which week.
+  models?: { version: string; from_week: number; scale_t?: number; nu_t?: number }[];
   record: RecordSummary;
   weekly: WeeklyResult[];
   calibration?: CalibrationBin[];
