@@ -45,6 +45,16 @@ export function formatKickoffDay(iso: string): string {
     .toUpperCase();
 }
 
+// Hour of kickoff in Eastern time (0-23). Games in the same hour share a
+// broadcast window: 4:05 and 4:25 are both the late afternoon window.
+export function kickoffHourET(iso: string): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: ET }).format(
+      new Date(iso),
+    ),
+  );
+}
+
 // "1:00 PM ET"
 export function formatKickoffTime(iso: string): string {
   return `${new Date(iso).toLocaleTimeString("en-US", {

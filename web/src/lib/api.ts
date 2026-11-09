@@ -30,6 +30,14 @@ export interface TeamsResponse {
   teams: TeamInfo[];
 }
 
+// Present once a game is final. Graded against the slate's own spread and pick.
+export interface GameResult {
+  away_score: number;
+  home_score: number;
+  covered: string | null; // null on a push
+  pick_result: "win" | "loss" | "push";
+}
+
 export interface SlateGame {
   away: string;
   home: string;
@@ -44,6 +52,7 @@ export interface SlateGame {
   pick: string;
   p_pick: number;
   edge_pts: number;
+  result?: GameResult | null;
 }
 
 export interface Slate {
@@ -52,6 +61,10 @@ export interface Slate {
   generated_at: string;
   model_version: string;
   is_stub: boolean;
+  // Error scale and degrees of freedom of the model's margin, for recomputing
+  // a cover probability at another line in the browser.
+  scale_t?: number;
+  nu_t?: number;
   games: SlateGame[];
 }
 
