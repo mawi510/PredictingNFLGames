@@ -76,7 +76,9 @@ def build_track_record() -> dict:
     # the coming week's rows before kickoff with is_cover 0 on both sides, and
     # that flag never updates for games played after the pull.
     played = load_schedule([latest_season]).dropna(subset=["margin"])
-    season = season.merge(played[["season", "week", "team", "margin"]], on=["season", "week", "team"])
+    season = season.merge(
+        played[["season", "week", "team", "margin", "points_for"]], on=["season", "week", "team"]
+    )
     season["covered"] = np.sign(season["margin"] + season["spread"])  # 1 cover, 0 push, -1 fail
     season = season.sort_values(["week", "team"]).reset_index(drop=True)
     season = attach_matchup_features(season)
@@ -89,24 +91,35 @@ def build_track_record() -> dict:
 
     # One pick per game: pair sides, take the higher-probability one.
     pick_rows = []
+    games = []  # every graded game with its final score, for the site's result columns
     pushes = 0
     for week, wk in season.groupby("week", sort=True):
         wk = wk.reset_index(drop=True)
         for i, j in pair_games(wk):
             ri, rj = wk.iloc[i], wk.iloc[j]
+            side = ri if float(ri["cover_proba"]) >= float(rj["cover_proba"]) else rj
+            home, away = (ri, rj) if int(ri["is_home"]) == 1 else (rj, ri)
+            game = {
+                "week": int(week),
+                "away": str(away["team"]),
+                "home": str(home["team"]),
+                "away_score": int(away["points_for"]),
+                "home_score": int(home["points_for"]),
+                "spread_home": float(home["spread"]),
+                "pick": str(side["team"]),
+            }
             if ri["covered"] == 0:
                 pushes += 1
+                games.append({**game, "result": "push", "units": 0.0})
                 continue
-            if float(ri["cover_proba"]) >= float(rj["cover_proba"]):
-                side = ri
-            else:
-                side = rj
-            won = side["covered"] > 0
+            won = bool(side["covered"] > 0)
+            units = WIN_PAYOUT if won else -1.0
+            games.append({**game, "result": "win" if won else "loss", "units": round(units, 3)})
             pick_rows.append({
                 "week": int(week),
                 "team": str(side["team"]),
                 "won": won,
-                "units": WIN_PAYOUT if won else -1.0,
+                "units": units,
             })
 
     picks = pd.DataFrame(pick_rows, columns=["week", "team", "won", "units"])
@@ -162,6 +175,7 @@ def build_track_record() -> dict:
             "roi": roi,
         },
         "weekly": weekly,
+        "games": games,
     }
 
 

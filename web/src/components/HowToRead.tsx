@@ -53,21 +53,19 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
       <h2 className="label mb-3 text-fg-2">
         How to read this: {game.away} at {game.home}
       </h2>
-      <div className="rounded-[4px] border border-line bg-surface">
-        <table className="w-full text-[13px]">
-          <tbody>
-            {rows.map(([label, value, meaning]) => (
-              <tr key={label} className="border-b border-line align-top last:border-b-0">
-                <th scope="row" className="label w-28 px-3 py-2.5 text-left font-normal text-fg-3 sm:w-32">
-                  {label}
-                </th>
-                <td className="num w-36 whitespace-nowrap px-3 py-2.5 font-mono text-fg sm:w-44">{value}</td>
-                <td className="px-3 py-2.5 leading-5 text-fg-2">{meaning}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Three columns from 640px; below that the explanation drops under its label. */}
+      <dl className="rounded-[4px] border border-line bg-surface text-[13px]">
+        {rows.map(([label, value, meaning]) => (
+          <div
+            key={label}
+            className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-b border-line px-3 py-2.5 last:border-b-0 sm:grid-cols-[8rem_11rem_1fr]"
+          >
+            <dt className="label pt-0.5 text-fg-3">{label}</dt>
+            <dd className="num whitespace-nowrap font-mono text-fg">{value}</dd>
+            <dd className="col-span-2 leading-5 text-fg-2 sm:col-span-1">{meaning}</dd>
+          </div>
+        ))}
+      </dl>
       <p className="label mt-3 text-fg-3">{modelVersion}</p>
     </section>
   );

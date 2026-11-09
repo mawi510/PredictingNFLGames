@@ -60,7 +60,7 @@ def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
     """One row per team-game from the nflverse schedule, regular season only.
 
     Columns: season, week, team, opponent, is_home, kickoff (ISO, Eastern),
-    margin (NaN until played). Team codes are normalized to the stats data's
+    margin, points_for, points_against (NaN until played). Team codes are normalized to the stats data's
     current codes.
     """
     key = tuple(sorted({int(s) for s in seasons}))
@@ -77,11 +77,13 @@ def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
         "season": sched["season"], "week": sched["week"],
         "team": sched["home_team"], "opponent": sched["away_team"], "is_home": 1,
         "kickoff": kickoff, "margin": sched["home_score"] - sched["away_score"],
+        "points_for": sched["home_score"], "points_against": sched["away_score"],
     })
     away = pd.DataFrame({
         "season": sched["season"], "week": sched["week"],
         "team": sched["away_team"], "opponent": sched["home_team"], "is_home": 0,
         "kickoff": kickoff, "margin": sched["away_score"] - sched["home_score"],
+        "points_for": sched["away_score"], "points_against": sched["home_score"],
     })
     out = pd.concat([home, away], ignore_index=True)
     out["season"] = out["season"].astype(int)

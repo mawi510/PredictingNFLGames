@@ -443,9 +443,46 @@ def _game_prediction(data: dict, team: str) -> Optional[dict]:
     }
 
 
+def _final_scores(season: int, week: int) -> dict:
+    """{(away, home): (away_score, home_score)} for graded games of one week.
+
+    The daily results job rewrites the track record with every finished game,
+    so this fills in as games end. Empty when there is no record yet.
+    """
+    try:
+        tr = track_record()
+    except HTTPException:
+        return {}
+    if tr.get("season") != season:
+        return {}
+    return {
+        (g["away"], g["home"]): (g["away_score"], g["home_score"])
+        for g in tr.get("games", [])
+        if g["week"] == week
+    }
+
+
+def _grade(game: dict, away_score: int, home_score: int) -> dict:
+    """Grade a slate game against its own spread and pick."""
+    diff = home_score - away_score + game["spread_home"]
+    covered = None if diff == 0 else game["home"] if diff > 0 else game["away"]
+    pick_result = "push" if covered is None else "win" if covered == game["pick"] else "loss"
+    return {
+        "away_score": away_score,
+        "home_score": home_score,
+        "covered": covered,
+        "pick_result": pick_result,
+    }
+
+
 @app.get("/slate")
 def slate() -> dict:
-    """Every game of the current week: both sides, one shared cover probability."""
+    """Every game of the current week: both sides, one shared cover probability.
+
+    Finished games carry a `result` (final score, who covered, pick result).
+    `scale_t` and `nu_t` let a client recompute the cover probability at any
+    other line: P(home covers) = t.cdf((predicted_margin_home + line) / scale_t, nu_t).
+    """
     data = load_current_features()
     if data is None:
         raise HTTPException(status_code=404, detail="Current features not available yet.")
@@ -485,12 +522,20 @@ def slate() -> dict:
             detail="Slate unavailable: current features carry no opponent data yet.",
         )
     games.sort(key=lambda g: (g["kickoff"] is None, g["kickoff"] or "", g["home"]))
+    scores = _final_scores(data["season"], week)
+    for g in games:
+        final = scores.get((g["away"], g["home"]))
+        g["result"] = _grade(g, *final) if final else None
+    bundle = load_model()
+    manifest = load_manifest()
     return {
         "season": data["season"],
         "week": week,
         "generated_at": data.get("generated_at"),
         "model_version": version,
         "is_stub": is_stub,
+        "scale_t": bundle["scale_t"] if bundle else (manifest["scale_t"] or 13.0),
+        "nu_t": bundle["nu_t"] if bundle else (manifest["nu_t"] or 30.0),
         "games": games,
     }
 
