@@ -5,6 +5,10 @@
   "margin-v2.2026.10": {
    "scale_t": 13.757953955031446,
    "nu_t": 50.0
+  },
+  "margin-v3.2026.11": {
+   "scale_t": 67.93514218256308,
+   "nu_t": 50.0
   }
  },
  "picks": [
@@ -975,6 +979,160 @@
    "p_pick": 0.6218,
    "model_version": "margin-v2.2026.10",
    "backfilled": true
+  },
+  {
+   "week": 10,
+   "away": "LA",
+   "home": "ARI",
+   "spread_home": 9.5,
+   "margin_home": -6.49,
+   "pick": "ARI",
+   "p_pick": 0.5176,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "KC",
+   "home": "ATL",
+   "spread_home": 3.5,
+   "margin_home": -5.27,
+   "pick": "KC",
+   "p_pick": 0.5104,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "LAC",
+   "home": "BAL",
+   "spread_home": -4.5,
+   "margin_home": 6.28,
+   "pick": "BAL",
+   "p_pick": 0.5104,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "PIT",
+   "home": "CIN",
+   "spread_home": -3.5,
+   "margin_home": -1.76,
+   "pick": "PIT",
+   "p_pick": 0.5307,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "HOU",
+   "home": "CLE",
+   "spread_home": 4.5,
+   "margin_home": -7.91,
+   "pick": "HOU",
+   "p_pick": 0.5199,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "SF",
+   "home": "DAL",
+   "spread_home": 4.5,
+   "margin_home": -2.7,
+   "pick": "DAL",
+   "p_pick": 0.5105,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "NE",
+   "home": "DET",
+   "spread_home": -2.5,
+   "margin_home": 4.85,
+   "pick": "DET",
+   "p_pick": 0.5137,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "MIN",
+   "home": "GB",
+   "spread_home": -3.0,
+   "margin_home": 2.94,
+   "pick": "MIN",
+   "p_pick": 0.5003,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "MIA",
+   "home": "IND",
+   "spread_home": -3.5,
+   "margin_home": 1.92,
+   "pick": "MIA",
+   "p_pick": 0.5093,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "SEA",
+   "home": "LV",
+   "spread_home": 6.5,
+   "margin_home": -10.06,
+   "pick": "SEA",
+   "p_pick": 0.5208,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "CAR",
+   "home": "NO",
+   "spread_home": -2.5,
+   "margin_home": 5.11,
+   "pick": "NO",
+   "p_pick": 0.5152,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "WAS",
+   "home": "NYG",
+   "spread_home": -2.5,
+   "margin_home": 2.21,
+   "pick": "WAS",
+   "p_pick": 0.5017,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "BUF",
+   "home": "NYJ",
+   "spread_home": 8.5,
+   "margin_home": -9.37,
+   "pick": "BUF",
+   "p_pick": 0.5051,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
+  },
+  {
+   "week": 10,
+   "away": "JAX",
+   "home": "TEN",
+   "spread_home": 10.5,
+   "margin_home": -7.77,
+   "pick": "TEN",
+   "p_pick": 0.516,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-11T20:01:47.078954+00:00"
   }
  ]
 }
