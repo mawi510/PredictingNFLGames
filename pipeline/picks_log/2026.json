@@ -1276,6 +1276,182 @@
    "p_pick": 0.5143,
    "model_version": "margin-v3.2026.11",
    "logged_at": "2026-11-18T21:08:07.788973+00:00"
+  },
+  {
+   "week": 12,
+   "away": "WAS",
+   "home": "ARI",
+   "spread_home": 7.0,
+   "margin_home": -4.07,
+   "pick": "ARI",
+   "p_pick": 0.5171,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "KC",
+   "home": "BUF",
+   "spread_home": -3.0,
+   "margin_home": 1.32,
+   "pick": "KC",
+   "p_pick": 0.5098,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NO",
+   "home": "CIN",
+   "spread_home": -10.0,
+   "margin_home": 8.96,
+   "pick": "NO",
+   "p_pick": 0.5061,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "LV",
+   "home": "CLE",
+   "spread_home": -4.5,
+   "margin_home": 1.2,
+   "pick": "LV",
+   "p_pick": 0.5193,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "PHI",
+   "home": "DAL",
+   "spread_home": -8.5,
+   "margin_home": 8.78,
+   "pick": "DAL",
+   "p_pick": 0.5016,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "CHI",
+   "home": "DET",
+   "spread_home": 1.5,
+   "margin_home": 2.64,
+   "pick": "DET",
+   "p_pick": 0.5241,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "BAL",
+   "home": "HOU",
+   "spread_home": -7.0,
+   "margin_home": 6.13,
+   "pick": "BAL",
+   "p_pick": 0.5051,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NYG",
+   "home": "IND",
+   "spread_home": 6.5,
+   "margin_home": 0.02,
+   "pick": "IND",
+   "p_pick": 0.5381,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "TEN",
+   "home": "JAX",
+   "spread_home": -14.5,
+   "margin_home": 9.89,
+   "pick": "TEN",
+   "p_pick": 0.5269,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "GB",
+   "home": "LA",
+   "spread_home": -2.5,
+   "margin_home": 9.55,
+   "pick": "LA",
+   "p_pick": 0.5411,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NE",
+   "home": "LAC",
+   "spread_home": -1.5,
+   "margin_home": 0.37,
+   "pick": "NE",
+   "p_pick": 0.5066,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NYJ",
+   "home": "MIA",
+   "spread_home": 3.5,
+   "margin_home": -1.64,
+   "pick": "MIA",
+   "p_pick": 0.5109,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "ATL",
+   "home": "MIN",
+   "spread_home": -7.0,
+   "margin_home": 7.72,
+   "pick": "MIN",
+   "p_pick": 0.5042,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "DEN",
+   "home": "PIT",
+   "spread_home": 3.5,
+   "margin_home": -0.68,
+   "pick": "PIT",
+   "p_pick": 0.5165,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "SEA",
+   "home": "SF",
+   "spread_home": -2.5,
+   "margin_home": 3.93,
+   "pick": "SF",
+   "p_pick": 0.5084,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
+  },
+  {
+   "week": 12,
+   "away": "CAR",
+   "home": "TB",
+   "spread_home": -3.0,
+   "margin_home": 0.89,
+   "pick": "CAR",
+   "p_pick": 0.5123,
+   "model_version": "margin-v3.2026.11",
+   "logged_at": "2026-11-25T22:10:23.799869+00:00"
   }
  ]
 }
