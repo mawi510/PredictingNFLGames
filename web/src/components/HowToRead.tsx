@@ -14,7 +14,6 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
   const pickSpread = pickIsHome ? game.spread_home : -game.spread_home;
   const pPick = formatPct(game.p_pick, 1);
   const pOther = formatPct(1 - game.p_pick, 1);
-  const lean = game.p_pick < 0.52;
 
   const rows: [string, string, string][] = [
     [
@@ -41,10 +40,8 @@ export default function HowToRead({ game, modelVersion }: { game: SlateGame; mod
     ],
     [
       "Pick",
-      `${game.pick} ${formatSpread(pickSpread)}${lean ? " · lean" : ""}`,
-      lean
-        ? "The side with the higher cover probability. Under 52% it is a lean: the gap is inside the model's noise."
-        : "The side with the higher cover probability. Picks are graded after kickoff on the Record page.",
+      `${game.pick} ${formatSpread(pickSpread)}`,
+      "The side with the higher cover probability. Picks are graded after kickoff on the Record page.",
     ],
   ];
 

@@ -33,7 +33,6 @@ export default function LinePanel({
   const pHome = homeCoverProbability(game.predicted_margin_home, line, scale, nu);
   const pick = pHome >= 0.5 ? game.home : game.away;
   const pickSpread = pick === game.home ? line : -line;
-  const pPick = Math.max(pHome, 1 - pHome);
   const moved = line !== market;
   const evenLine = -game.predicted_margin_home;
 
@@ -100,7 +99,7 @@ export default function LinePanel({
 
         <div>
           <div className="label mb-1 text-fg-2">Pick at this line</div>
-          <PickBadge team={pick} spread={pickSpread} probability={pPick} />
+          <PickBadge team={pick} spread={pickSpread} />
         </div>
       </div>
 
