@@ -6,6 +6,8 @@ name: Daily Results
 # Wednesday job. Only results change.
 on:
   workflow_dispatch:
+  # The EC2 cron (infra/cron.d) dispatches this at 05:30 and 12:00 UTC. GitHub's
+  # schedule below runs hours late and is only a backup.
   schedule:
     # 11:00 UTC (6-7am ET), September through February.
     - cron: "0 11 * 9-12,1-2 *"

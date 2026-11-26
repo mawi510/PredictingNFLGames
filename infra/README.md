@@ -74,6 +74,34 @@ sudo certbot --nginx -d api.promatchpredict.com
 Open the security group for inbound 80 + 443. Port 8000 stays closed — it's
 bound to 127.0.0.1 and only nginx reaches it.
 
+## Starting the scheduled jobs on time
+
+GitHub's cron starts our jobs 4 to 11 hours late (the 11:00 UTC results job ran
+between 14:46 and 22:17 UTC in Nov 2026). A cron entry on the box starts them on
+time through GitHub's workflow dispatch API instead. The GitHub schedules stay in
+the workflows as a backup; a second run of either job changes nothing.
+
+1. Create a fine-grained GitHub token: Settings > Developer settings > Fine-grained
+   tokens. Repository access: only `mawi510/PredictingNFLGames`. Permissions:
+   Actions, read and write. Nothing else.
+2. On the box, as `ec2-user`:
+
+```bash
+mkdir -p ~/bin ~/.config/promatchpredict
+curl -fsSL https://raw.githubusercontent.com/mawi510/PredictingNFLGames/main/infra/dispatch-workflow.sh -o ~/bin/dispatch-workflow.sh
+chmod 700 ~/bin/dispatch-workflow.sh
+# Paste the token, then Enter, then Ctrl-D. It never appears in shell history.
+cat > ~/.config/promatchpredict/gh-dispatch-token
+chmod 600 ~/.config/promatchpredict/gh-dispatch-token
+# Test: this starts a results run now (Actions tab shows it within seconds).
+~/bin/dispatch-workflow.sh daily-results.yml
+sudo curl -fsSL https://raw.githubusercontent.com/mawi510/PredictingNFLGames/main/infra/cron.d/promatchpredict-dispatch -o /etc/cron.d/promatchpredict-dispatch
+sudo chmod 644 /etc/cron.d/promatchpredict-dispatch
+```
+
+Each dispatch appends a line to `~/dispatch.log`. Re-run the last `sudo curl`
+whenever `infra/cron.d/promatchpredict-dispatch` changes.
+
 ## Manual redeploy
 
 Trigger the **Deploy Model API** workflow via `workflow_dispatch`, or on the box:

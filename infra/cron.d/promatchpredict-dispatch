@@ -1,0 +1,13 @@
+# Starts the site's GitHub Actions jobs on time. Install as
+# /etc/cron.d/promatchpredict-dispatch (see infra/README.md). Times are UTC.
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+LOG=/home/ec2-user/dispatch.log
+
+# Grade last night's games: 05:30 UTC is 12:30am EST, about an hour after the
+# late game's final reaches nflverse. 12:00 UTC (7am EST) is a second try.
+30 5 * 9-12,1-2 * ec2-user /home/ec2-user/bin/dispatch-workflow.sh daily-results.yml >> $LOG 2>&1
+0 12 * 9-12,1-2 * ec2-user /home/ec2-user/bin/dispatch-workflow.sh daily-results.yml >> $LOG 2>&1
+
+# Wednesday data refresh and pick logging, after nflverse posts the week's spreads.
+0 13 * 9-12,1-2 3 ec2-user /home/ec2-user/bin/dispatch-workflow.sh weekly-data.yml >> $LOG 2>&1
