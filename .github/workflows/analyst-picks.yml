@@ -1,0 +1,76 @@
+name: Analyst Picks
+
+# Claude researches each game kicking off in the next 30 hours and logs a pick
+# (pipeline/analyst.py), then the track record is regraded so the site shows it.
+# The EC2 cron (infra/cron.d) dispatches this daily at 15:00 UTC. There is no
+# GitHub schedule: it runs hours late, and a late run would read Sunday night
+# games on Saturday evening instead of Sunday morning.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write  # GitHub's identity token stands in for a Claude API key
+
+# Two runs at once could both log the same game.
+concurrency:
+  group: analyst-picks
+
+jobs:
+  analyst:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            numpy==1.23.5 scipy==1.9.3 \
+            "pandas>=1.5,<2.1" pyarrow requests s3fs boto3 nfl_data_py \
+            "anthropic>=2.14,<3"
+
+      # Workload identity federation: the SDK trades GitHub's identity token
+      # for Claude API access, so no API key is stored. The federation rule in
+      # the Claude Console accepts tokens from this repo's main branch only.
+      - name: Log analyst picks
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
+          ANTHROPIC_ORGANIZATION_ID: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
+          ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
+          ANTHROPIC_IDENTITY_TOKEN_FILE: ${{ runner.temp }}/gha-jwt
+        run: |
+          # GitHub's token expires after 5 minutes and a run can take longer, so
+          # rewrite the file every 2 minutes; the SDK rereads it on each refresh.
+          fetch_token() {
+            curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
+              | jq -r .value > "$ANTHROPIC_IDENTITY_TOKEN_FILE.tmp" \
+              && mv "$ANTHROPIC_IDENTITY_TOKEN_FILE.tmp" "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+          }
+          fetch_token
+          (while sleep 120; do fetch_token; done) &
+          python -m pipeline.analyst
+
+      - name: Commit the analyst log
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add pipeline/picks_log
+          git commit -m "Analyst picks" || { echo "No new picks"; exit 0; }
+          git pull --rebase
+          git push
+
+      - name: Regrade season track record
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TRACK_RECORD_S3_URI: s3://nfl.data/track_record.json
+        run: python -m pipeline.backtest

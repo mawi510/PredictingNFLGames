@@ -30,6 +30,7 @@ from pathlib import Path
 import pandas as pd
 
 from pipeline.margin_model import DEFAULT_BUNDLE_PATH, load_bundle, load_schedule
+from pipeline.analyst import load_analyst_log
 from pipeline.picks_log import MIN_WEEK, load_log
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,31 +69,8 @@ def build_track_record() -> dict:
         for r in sched[sched["is_home"] == 1].itertuples()
     }
 
-    games = []  # every graded game with its final score
-    for p in sorted(log, key=lambda p: (p["week"], p["home"])):
-        final = finals.get((p["week"], p["home"]))
-        if final is None:
-            continue  # not played yet
-        away_score, home_score = final
-        diff = home_score - away_score + p["spread_home"]
-        if diff == 0:
-            result, units = "push", 0.0
-        else:
-            covered = p["home"] if diff > 0 else p["away"]
-            result = "win" if covered == p["pick"] else "loss"
-            units = WIN_PAYOUT if result == "win" else -1.0
-        games.append({
-            "week": p["week"], "away": p["away"], "home": p["home"],
-            "away_score": away_score, "home_score": home_score,
-            "spread_home": p["spread_home"], "pick": p["pick"], "p_pick": p["p_pick"],
-            "model_version": p["model_version"],
-            "result": result, "units": round(units, 3),
-        })
-
+    games = _grade_log(log, finals, ("p_pick", "model_version"))
     decided = [g for g in games if g["result"] != "push"]
-    wins = sum(g["result"] == "win" for g in decided)
-    losses = len(decided) - wins
-    total_units = round(sum(g["units"] for g in decided), 2)
 
     # Week-by-week cumulative curve for the equity chart on the site.
     weekly = []
@@ -133,19 +111,74 @@ def build_track_record() -> dict:
             "odds_assumption": "flat -110 (win pays +0.909u, loss -1.0u)",
             "pick_unit": "one game (pushes excluded/refunded)",
         },
-        "record": {
-            "wins": wins,
-            "losses": losses,
-            "pushes": len(games) - len(decided),
-            "total_picks": len(decided),
-            "win_pct": round(wins / len(decided), 4) if decided else 0.0,
-            "total_units": total_units,
-            "roi": round(total_units / len(decided), 4) if decided else 0.0,
-        },
+        "record": _summary(games),
         "weekly": weekly,
         "games": games,
         # The current week's logged picks, played or not, so the slate shows
         # exactly what was published even after a data refresh or model change.
+        "logged": [p for p in log if p["week"] == latest_week],
+        "analyst": _analyst_section(latest_season, latest_week, finals, games),
+    }
+
+
+def _grade_log(log: list[dict], finals: dict, keep: tuple[str, ...]) -> list[dict]:
+    """Grade each played pick at its own logged line. `keep` names extra entry fields to carry."""
+    games = []  # every graded game with its final score
+    for p in sorted(log, key=lambda p: (p["week"], p["home"])):
+        final = finals.get((p["week"], p["home"]))
+        if final is None:
+            continue  # not played yet
+        away_score, home_score = final
+        diff = home_score - away_score + p["spread_home"]
+        if diff == 0:
+            result, units = "push", 0.0
+        else:
+            covered = p["home"] if diff > 0 else p["away"]
+            result = "win" if covered == p["pick"] else "loss"
+            units = WIN_PAYOUT if result == "win" else -1.0
+        games.append({
+            "week": p["week"], "away": p["away"], "home": p["home"],
+            "away_score": away_score, "home_score": home_score,
+            "spread_home": p["spread_home"], "pick": p["pick"],
+            **{k: p[k] for k in keep},
+            "result": result, "units": round(units, 3),
+        })
+    return games
+
+
+def _summary(games: list[dict]) -> dict:
+    decided = [g for g in games if g["result"] != "push"]
+    wins = sum(g["result"] == "win" for g in decided)
+    total_units = round(sum(g["units"] for g in decided), 2)
+    return {
+        "wins": wins,
+        "losses": len(decided) - wins,
+        "pushes": len(games) - len(decided),
+        "total_picks": len(decided),
+        "win_pct": round(wins / len(decided), 4) if decided else 0.0,
+        "total_units": total_units,
+        "roi": round(total_units / len(decided), 4) if decided else 0.0,
+    }
+
+
+def _analyst_section(season: int, latest_week: int, finals: dict, model_games: list[dict]) -> dict | None:
+    """Claude's research picks (pipeline/analyst.py), graded the same way, plus the
+    model's record on the same games so the two compare on equal terms."""
+    log = load_analyst_log(season)["picks"]
+    if not log:
+        return None
+    games = _grade_log(log, finals, ("confidence", "reason", "flags"))
+    graded = {(g["week"], g["away"], g["home"]) for g in games}
+    return {
+        "from_week": min(p["week"] for p in log),
+        "record": _summary(games),
+        "model_same_games": _summary(
+            [g for g in model_games if (g["week"], g["away"], g["home"]) in graded]),
+        "by_confidence": [
+            {"confidence": c, **_summary([g for g in games if g["confidence"] == c])}
+            for c in sorted({g["confidence"] for g in games})
+        ],
+        "games": games,
         "logged": [p for p in log if p["week"] == latest_week],
     }
 

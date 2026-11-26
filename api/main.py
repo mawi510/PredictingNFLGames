@@ -484,6 +484,28 @@ def _logged_picks(season: int, week: int) -> dict:
     }
 
 
+def _analyst_picks(season: int, week: int) -> dict:
+    """{(away, home): analyst entry} for the week (pipeline/analyst.py), if any."""
+    try:
+        tr = track_record()
+    except HTTPException:
+        return {}
+    if tr.get("season") != season or not tr.get("analyst"):
+        return {}
+    return {(p["away"], p["home"]): p for p in tr["analyst"]["logged"] if p["week"] == week}
+
+
+def _analyst_view(entry: dict, final: Optional[tuple]) -> dict:
+    """What the slate shows of an analyst pick; graded at its own logged line."""
+    view = {k: entry[k] for k in ("pick", "spread_home", "confidence", "reason", "flags", "sources", "logged_at")}
+    view["result"] = None
+    if final:
+        diff = final[1] - final[0] + entry["spread_home"]
+        covered = None if diff == 0 else entry["home"] if diff > 0 else entry["away"]
+        view["result"] = "push" if covered is None else "win" if covered == entry["pick"] else "loss"
+    return view
+
+
 def _apply_logged(game: dict, entry: dict) -> None:
     """Replace a live prediction with what was published for that game.
 
@@ -532,6 +554,7 @@ def slate() -> dict:
     A game whose pick is already in the log shows the logged pick, line and
     probability (`pick_model_version` names the model that made it).
     Finished games carry a `result` (final score, who covered, pick result).
+    `analyst` is Claude's research pick for the game, when logged, graded at its own line.
     `scale_t` and `nu_t` let a client recompute the cover probability at any
     other line: P(home covers) = t.cdf((predicted_margin_home + line) / scale_t, nu_t).
     """
@@ -576,6 +599,7 @@ def slate() -> dict:
     games.sort(key=lambda g: (g["kickoff"] is None, g["kickoff"] or "", g["home"]))
     scores = _final_scores(data["season"], week)
     logged = _logged_picks(data["season"], week)
+    analyst = _analyst_picks(data["season"], week)
     for g in games:
         g["pick_model_version"] = version
         entry = logged.get((g["away"], g["home"]))
@@ -583,6 +607,8 @@ def slate() -> dict:
             _apply_logged(g, entry)
         final = scores.get((g["away"], g["home"]))
         g["result"] = _grade(g, *final) if final else None
+        a = analyst.get((g["away"], g["home"]))
+        g["analyst"] = _analyst_view(a, final) if a else None
     bundle = load_model()
     manifest = load_manifest()
     return {

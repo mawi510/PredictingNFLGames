@@ -39,6 +39,33 @@ sudo certbot --nginx -d promatchpredict.com -d www.promatchpredict.com
 
 `GITHUB_TOKEN` is provided automatically and is used to push to / pull from GHCR.
 
+The analyst job (analyst-picks.yml) needs no Claude API key. It signs in with
+GitHub's identity token through workload identity federation. One-time setup:
+
+1. Claude Console (platform.claude.com, not claude.ai) > Settings > Workload
+   identity > Connect workload > GitHub Actions. In the Federation rule step:
+   - GitHub organization `mawi510`, repository `PredictingNFLGames`, branch
+     `refs/heads/main`, organization numeric ID `117122865`.
+   - Allowed events: the job is started by workflow dispatch, so "Only push"
+     rejects it. Pick workflow_dispatch if the list has it. If not, open
+     Advanced match options (it then replaces the fields above) and set subject
+     pattern `repo:mawi510/PredictingNFLGames:ref:refs/heads/main`, plus claim
+     conditions `event_name` = `workflow_dispatch` and `repository_owner_id` =
+     `117122865`. Leave the audience blank.
+   - Pick one workspace. Keep scope `workspace:developer` and the 10-minute
+     token lifetime.
+   - Target step: create a service account for the job.
+2. Add four **repository secrets** (Settings > Secrets and variables > Actions >
+   Secrets, not Environments). They cannot sign anyone in on their own, but run
+   logs are public on this repo and secrets show there as `***`:
+   `ANTHROPIC_FEDERATION_RULE_ID`
+   (`fdrl_...`), `ANTHROPIC_ORGANIZATION_ID` (Console > Settings >
+   Organization), `ANTHROPIC_SERVICE_ACCOUNT_ID` (`svac_...`) and
+   `ANTHROPIC_WORKSPACE_ID` (`wrkspc_...`).
+
+A rejected sign-in shows as a 401 in the job log. The Console's authentication
+history gives the reason; a wrong subject prefix is the most common one.
+
 ## One-time EC2 provisioning
 
 Done once on the box (the deploy workflow handles everything after).

@@ -44,6 +44,41 @@ export default function RecordPage() {
         <StatTile label="Pushes" value={String(r.pushes)} meta="refunded, not counted" />
       </div>
 
+      {tr.analyst && (
+        <Section title="Analyst picks">
+          <p className="mb-3 max-w-[760px] text-[13px] leading-5 text-fg-2">
+            Since week {tr.analyst.from_week}, Claude also researches each game on the web (injuries,
+            weather, rest, line moves) and logs its own pick before kickoff, graded the same way at
+            its own line. It cannot be backtested, so this record is the only evidence. A few dozen
+            picks cannot separate skill from luck.
+          </p>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatTile
+              label="Analyst"
+              value={`${tr.analyst.record.wins}-${tr.analyst.record.losses}`}
+              meta={`${tr.analyst.record.pushes} pushes`}
+            />
+            <StatTile
+              label="Analyst units"
+              value={formatUnits(tr.analyst.record.total_units)}
+              tone={tr.analyst.record.total_units}
+              meta="flat 1u per pick"
+            />
+            <StatTile
+              label="Model, same games"
+              value={`${tr.analyst.model_same_games.wins}-${tr.analyst.model_same_games.losses}`}
+              meta={`${tr.analyst.model_same_games.pushes} pushes`}
+            />
+            <StatTile
+              label="Model units"
+              value={formatUnits(tr.analyst.model_same_games.total_units)}
+              tone={tr.analyst.model_same_games.total_units}
+              meta="same games"
+            />
+          </div>
+        </Section>
+      )}
+
       <Section title="Units by week">
         <EquityChart weekly={tr.weekly} />
       </Section>
