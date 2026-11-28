@@ -88,7 +88,6 @@ export default function MatchupRow({
             <PickBadge
               team={game.pick}
               spread={pickSpread}
-              probability={game.p_pick}
               result={r?.pick_result}
             />
           )}
