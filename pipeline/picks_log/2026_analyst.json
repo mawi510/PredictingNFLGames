@@ -1,0 +1,230 @@
+{
+ "season": 2026,
+ "note": "Claude's research picks. One entry per game, written before kickoff and never changed.",
+ "picks": [
+  {
+   "week": 12,
+   "away": "NO",
+   "home": "CIN",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": -9.5,
+   "pick": "NO",
+   "confidence": 2,
+   "reason": "Cincinnati is on a short week after Monday night, and its line is thinner with RG Risner out and Higgins questionable. New Orleans' pass rush keeps a near double-digit spread live.",
+   "flags": [
+    "key_injuries",
+    "rest_or_travel",
+    "line_moved"
+   ],
+   "sources": [
+    "https://sports.yahoo.com/nfl/articles/wednesday-saints-vs-bengals-injury-220617438.html",
+    "https://www.neworleanssaints.com/news/injury-report-cincinnati-bengals-vs-new-orleans-saints-2026-nfl-week-12-wednesday",
+    "https://sports.yahoo.com/nfl/articles/thursday-saints-vs-bengals-injury-234815054.html",
+    "https://www.bengals.com/news/week-12-2026-injury-report-saints-bengals",
+    "https://sports.yahoo.com/nfl/articles/saints-share-much-needed-good-235853986.html"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:29:38.052066+00:00"
+  },
+  {
+   "week": 12,
+   "away": "BAL",
+   "home": "HOU",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": -6.5,
+   "pick": "HOU",
+   "confidence": 1,
+   "reason": "Baltimore is down Lamar, Madubuike, Hawkins and now guard Ioane against a strong, rested Houston defense; the injuries roughly cancel the model's slim Ravens lean.",
+   "flags": [
+    "qb_out",
+    "key_injuries",
+    "rest_or_travel",
+    "key_number",
+    "line_moved"
+   ],
+   "sources": [
+    "https://sports.yahoo.com/nfl/articles/ravens-final-injury-report-week-230353944.html",
+    "https://sports.yahoo.com/nfl/articles/ravens-week-12-injury-report-180610583.html",
+    "https://www.si.com/nfl/texans/onsi/texans-injury-report-has-4-players-ruled-out-for-week-12-vs-ravens",
+    "https://www.cbssports.com/nfl/news/nfl-week-12-injury-report-brock-purdy-justin-herbert-out/",
+    "https://www.nfl.com/news/nfl-week-12-injury-report-2026-season"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:30:06.602529+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NYG",
+   "home": "IND",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": 5.5,
+   "pick": "IND",
+   "confidence": 2,
+   "reason": "Colts get three extra days of rest, Sauce Gardner and Raimann back, and the line has dropped from 7 to 5.5 despite public Giants money. Our model and another model both rate it closer.",
+   "flags": [
+    "line_moved",
+    "public_side",
+    "rest_or_travel",
+    "key_injuries"
+   ],
+   "sources": [
+    "https://www.giants.com/news/giants-vs-colts-how-to-watch-listen-live-stream-week-12",
+    "https://www.cbssports.com/nfl/news/giants-vs-colts-prediction-odds-spread-start-time-2024-nfl-picks-week-17-predictions-from-proven-model",
+    "https://www.cbssports.com/nfl/news/nfl-odds-lines-spreads-picks-predictions-for-week-12-2020-proven-model-loving-giants-colts",
+    "https://www.cbssports.com/nfl/news/giants-vs-colts-where-to-watch-tv-channel-nfl-kickoff-time-live-stream-spread-odds/",
+    "https://www.si.com/nfl/giants/gameday/giants-vs-colts-how-to-watch-odds-history-and-more"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:30:40.599901+00:00"
+  },
+  {
+   "week": 12,
+   "away": "TEN",
+   "home": "JAX",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": -14.0,
+   "pick": "TEN",
+   "confidence": 2,
+   "reason": "Model projects JAX by about 10, well short of 14; two-touchdown divisional spread, and Jaguars are missing Washington, Tuten and Mekari, which offsets Titans' secondary absences.",
+   "flags": [
+    "key_injuries",
+    "key_number"
+   ],
+   "sources": [
+    "https://www.cbssports.com/nfl/news/nfl-week-12-injury-report-brock-purdy-justin-herbert-out/",
+    "https://www.tennesseetitans.com/news/week-12-injury-report-titans-at-jaguars",
+    "https://www.nfl.com/news/nfl-week-12-injury-report-2026-season",
+    "https://sports.yahoo.com/fantasy/articles/week-12-fantasy-football-final-120005102.html",
+    "https://clutchpoints.com/nfl/jacksonville-jaguars/jaguars-week-12-injury-report-vs-titans-late-parker-washington-injury-addition-causes-concern"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:31:07.945221+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NYJ",
+   "home": "MIA",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": 5.5,
+   "pick": "MIA",
+   "confidence": 2,
+   "reason": "McCord starting was already priced Wednesday; two points of movement for DL returns overstates it, and +5.5 in a ~40-total division game holds value.",
+   "flags": [
+    "line_moved",
+    "key_injuries",
+    "qb_out"
+   ],
+   "sources": [
+    "https://sports.yahoo.com/nfl/articles/breaking-down-jets-week-12-203001121.html",
+    "https://www.si.com/nfl/jets/onsi/breaking-down-jets-week-12-injury-report-who-s-hurt-who-could-return-dolphins-01m8f5e6d85j",
+    "https://www.newyorkjets.com/news/jets-injury-report-week-12-vs-dolphins-friday-11-27-2026",
+    "https://www.newyorkjets.com/news/jets-injury-report-week-12-vs-dolphins-thursday-11-26-2026",
+    "https://www.cbssports.com/nfl/news/nfl-week-12-injury-report-brock-purdy-justin-herbert-out/"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:31:41.184447+00:00"
+  },
+  {
+   "week": 12,
+   "away": "ATL",
+   "home": "MIN",
+   "kickoff": "2026-11-29T13:00:00-05:00",
+   "spread_home": -7.0,
+   "pick": "ATL",
+   "confidence": 2,
+   "reason": "Atlanta comes off a bye. Minnesota is without LT Darrisaw, WR Addison and CB Rodgers, the total is low at 41.5, and despite heavy public money on Minnesota the pricing has shifted toward ATL +7.",
+   "flags": [
+    "key_injuries",
+    "rest_or_travel",
+    "key_number",
+    "public_side"
+   ],
+   "sources": [
+    "https://www.vikings.com/news/falcons-injury-report-week-12-2026-nfl-season",
+    "https://sports.yahoo.com/nfl/articles/wednesday-injury-report-vikings-week-043505050.html",
+    "https://sports.yahoo.com/nfl/articles/falcons-vs-vikings-final-injury-185626644.html",
+    "https://www.vikings.com/news/falcons-injury-report-week-12-2026-nfl-season&gsessionid=82q6p1rat5nTGW-EtVRJivo-kwb5o5o6p_CIXgSloHAGI8io8H2KEQ",
+    "https://www.cbssports.com/nfl/news/nfl-week-12-injury-report-brock-purdy-justin-herbert-out/"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:32:16.006083+00:00"
+  },
+  {
+   "week": 12,
+   "away": "NE",
+   "home": "LAC",
+   "kickoff": "2026-11-29T16:05:00-05:00",
+   "spread_home": 3.0,
+   "pick": "LAC",
+   "confidence": 1,
+   "reason": "The 4.5-point move for Herbert's absence looks a bit big given LA's last-ranked offense with him; +3 has value in a 35.5 total, and NE lacks Brown/Doubs.",
+   "flags": [
+    "qb_out",
+    "key_injuries",
+    "line_moved",
+    "key_number",
+    "rest_or_travel"
+   ],
+   "sources": [
+    "https://www.patriots.com/news/week-12-injury-report-patriots-at-chargers",
+    "https://www.patriots.com/news/injury-report-patriots-vs-chargers-wild-card-playoffs",
+    "https://www.chargers.com/news/justin-herbert-akheem-mesidor-patriots-injury-report-2026",
+    "https://sports.yahoo.com/nfl/articles/patriots-vs-chargers-wednesday-injury-002031876.html",
+    "https://sports.yahoo.com/nfl/articles/patriots-vs-chargers-friday-injury-191511480.html"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:32:54.415126+00:00"
+  },
+  {
+   "week": 12,
+   "away": "WAS",
+   "home": "ARI",
+   "kickoff": "2026-11-29T16:25:00-05:00",
+   "spread_home": 6.5,
+   "pick": "WAS",
+   "confidence": 1,
+   "reason": "With Josh Johnson starting again at quarterback, Arizona's home blowout losses and offense scoring 3, 6 and 7 points in its last three games outweigh Washington's short week and the line moving toward Arizona.",
+   "flags": [
+    "qb_out",
+    "rest_or_travel",
+    "line_moved",
+    "key_number"
+   ],
+   "sources": [
+    "https://revengeofthebirds.com/arizona-cardinals-game-information/97546/cardinals-commanders-week-12-injury-reports",
+    "https://sports.yahoo.com/nfl/articles/commanders-injury-report-only-1-235626204.html",
+    "https://arizonasports.com/arizona-cardinals-injury-report/cardinals-commanders-injury-report-carson-beck-ruled-out",
+    "https://www.si.com/nfl/commanders/onsi/commanders-cardinals-final-injury-report-week-12",
+    "https://www.azcardinals.com/news/injury-report-week-12-vs-commanders"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:33:32.557329+00:00"
+  },
+  {
+   "week": 12,
+   "away": "SEA",
+   "home": "SF",
+   "kickoff": "2026-11-29T16:25:00-05:00",
+   "spread_home": 1.5,
+   "pick": "SF",
+   "confidence": 2,
+   "reason": "A 4.5-point swing through 3 overrates the drop from Purdy to Mac Jones (5-3 as a starter in 2025), and Seattle is missing two starting offensive linemen.",
+   "flags": [
+    "qb_out",
+    "key_injuries",
+    "line_moved",
+    "key_number",
+    "rest_or_travel"
+   ],
+   "sources": [
+    "https://www.seahawks.com/schedule/event-calendar/2026-week-12-seahawks-at-san-francisco-49ers-11-29-26",
+    "https://www.seahawks.com/news/what-to-watch-in-seahawks-week-12-game-at-49ers",
+    "https://www.seahawks.com/news/how-to-watch-listen-and-follow-seahawks-at-49ers-in-week-12-on-sunday-november-29",
+    "https://www.cbssports.com/betting/news/49ers-seahawks-prediction-odds-time-2026-nfl-week-12-picks/",
+    "https://www.seahawks.com/news/picks-and-predictions-for-week-12-vs-the-san-francisco-49ers-x8936"
+   ],
+   "model": "claude-opus-5-5",
+   "logged_at": "2026-11-28T16:34:15.722026+00:00"
+  }
+ ]
+}
