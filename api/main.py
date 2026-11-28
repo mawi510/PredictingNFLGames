@@ -50,6 +50,15 @@ TRACK_RECORD_S3_URI = os.getenv(
 )
 # Seconds to cache the S3 track record in memory (it only changes weekly).
 TRACK_RECORD_TTL = int(os.getenv("TRACK_RECORD_TTL", "600"))
+# Final scores come straight from nflverse, so a result reaches the site about
+# 30 minutes after its game ends instead of waiting for the results job, which
+# GitHub starts hours late.
+GAMES_URL = os.getenv(
+    "GAMES_URL", "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+)
+LIVE_FINALS_TTL = int(os.getenv("LIVE_FINALS_TTL", "600"))
+TEAM_ALIASES = {"OAK": "LV", "SD": "LAC", "STL": "LA"}  # same as pipeline/margin_model.py
+WIN_PAYOUT = 100 / 110  # flat -110 odds, same as pipeline/backtest.py
 
 # Per-team current-week features (precomputed weekly by pipeline/current_features.py).
 CURRENT_FEATURES_PATH = os.getenv(
@@ -227,10 +236,130 @@ def status() -> dict:
 
 
 _track_cache: dict = {"data": None, "ts": 0.0}
+_finals_cache: dict = {"data": {}, "ts": 0.0}
 
 
 @app.get("/track-record")
 def track_record() -> dict:
+    """The season record, including games that finished since the results job ran."""
+    return _with_live_results(_stored_track_record())
+
+
+def _live_finals() -> dict:
+    """{(season, week, away, home): (away_score, home_score)} for every final
+    regular-season game. nflverse fills a score only once the game is final.
+    On a failed download, the last good copy (or nothing)."""
+    import csv
+    import io
+    import time
+    import urllib.request
+
+    now = time.time()
+    if now - _finals_cache["ts"] < LIVE_FINALS_TTL:
+        return _finals_cache["data"]
+    _finals_cache["ts"] = now  # also on failure, so a dead source is not retried every request
+    try:
+        with urllib.request.urlopen(GAMES_URL, timeout=10) as resp:
+            rows = list(csv.DictReader(io.StringIO(resp.read().decode())))
+        finals = {}
+        for r in rows:
+            if r["game_type"] != "REG" or not r["home_score"] or not r["away_score"]:
+                continue
+            away = TEAM_ALIASES.get(r["away_team"], r["away_team"])
+            home = TEAM_ALIASES.get(r["home_team"], r["home_team"])
+            finals[(int(r["season"]), int(r["week"]), away, home)] = (
+                int(float(r["away_score"])), int(float(r["home_score"])))
+    except Exception:
+        return _finals_cache["data"]
+    _finals_cache["data"] = finals
+    return finals
+
+
+def _pick_result(entry: dict, final: tuple) -> str:
+    """Grade a logged pick at its own line: "win", "loss" or "push"."""
+    diff = final[1] - final[0] + entry["spread_home"]
+    if diff == 0:
+        return "push"
+    covered = entry["home"] if diff > 0 else entry["away"]
+    return "win" if covered == entry["pick"] else "loss"
+
+
+def _summary(games: list) -> dict:
+    """Same record fields as pipeline/backtest.py."""
+    decided = [g for g in games if g["result"] != "push"]
+    wins = sum(g["result"] == "win" for g in decided)
+    units = round(sum(g["units"] for g in decided), 2)
+    return {
+        "wins": wins, "losses": len(decided) - wins, "pushes": len(games) - len(decided),
+        "total_picks": len(decided),
+        "win_pct": round(wins / len(decided), 4) if decided else 0.0,
+        "total_units": units,
+        "roi": round(units / len(decided), 4) if decided else 0.0,
+    }
+
+
+def _weekly(games: list) -> list:
+    """Week-by-week cumulative curve, same as pipeline/backtest.py."""
+    decided = [g for g in games if g["result"] != "push"]
+    out, cum_w, cum_l, cum_u = [], 0, 0, 0.0
+    for week in sorted({g["week"] for g in decided}):
+        wk = [g for g in decided if g["week"] == week]
+        w = sum(g["result"] == "win" for g in wk)
+        cum_w, cum_l, cum_u = cum_w + w, cum_l + len(wk) - w, cum_u + sum(g["units"] for g in wk)
+        out.append({"week": week, "wins": w, "losses": len(wk) - w, "cumulative_wins": cum_w,
+                    "cumulative_losses": cum_l, "cumulative_units": round(cum_u, 2)})
+    return out
+
+
+def _with_live_results(tr: dict) -> dict:
+    """Add this week's logged picks whose games finished after the results job
+    ran, graded the same way that job grades them. Its next run writes the same
+    games to the stored record."""
+    finals = _live_finals()
+    season = tr.get("season")
+
+    def newly_final(logged: list, games: list, keep: tuple) -> list:
+        graded = {(g["week"], g["away"], g["home"]) for g in games}
+        out = []
+        for p in logged:
+            final = finals.get((season, p["week"], p["away"], p["home"]))
+            if final is None or (p["week"], p["away"], p["home"]) in graded:
+                continue
+            result = _pick_result(p, final)
+            units = WIN_PAYOUT if result == "win" else -1.0 if result == "loss" else 0.0
+            out.append({
+                "week": p["week"], "away": p["away"], "home": p["home"],
+                "away_score": final[0], "home_score": final[1],
+                "spread_home": p["spread_home"], "pick": p["pick"],
+                **{k: p.get(k) for k in keep}, "result": result, "units": round(units, 3),
+            })
+        return out
+
+    extra = newly_final(tr.get("logged", []), tr.get("games", []), ("p_pick", "model_version"))
+    a = tr.get("analyst")
+    a_extra = newly_final(a["logged"], a["games"], ("confidence", "reason", "flags")) if a else []
+    if not extra and not a_extra:
+        return tr
+    out = dict(tr)
+    if extra:
+        games = tr["games"] + extra
+        out.update(games=games, record=_summary(games), weekly=_weekly(games))
+    if a:
+        a_games = a["games"] + a_extra
+        keys = {(g["week"], g["away"], g["home"]) for g in a_games}
+        out["analyst"] = {
+            **a, "games": a_games, "record": _summary(a_games),
+            "model_same_games": _summary(
+                [g for g in out["games"] if (g["week"], g["away"], g["home"]) in keys]),
+            "by_confidence": [
+                {"confidence": c, **_summary([g for g in a_games if g["confidence"] == c])}
+                for c in sorted({g["confidence"] for g in a_games})
+            ],
+        }
+    return out
+
+
+def _stored_track_record() -> dict:
     """Return the precomputed season win/loss backtest.
 
     Written weekly by pipeline/backtest.py to S3 (or a local file in dev). Read
@@ -449,22 +578,26 @@ def _game_prediction(data: dict, team: str) -> Optional[dict]:
 
 
 def _final_scores(season: int, week: int) -> dict:
-    """{(away, home): (away_score, home_score)} for graded games of one week.
-
-    The daily results job rewrites the track record with every finished game,
-    so this fills in as games end. Empty when there is no record yet.
-    """
+    """{(away, home): (away_score, home_score)} for final games of one week,
+    from nflverse directly, so results show about 30 minutes after a game ends.
+    Falls back to the stored record when nflverse cannot be read."""
+    scores = {}
     try:
-        tr = track_record()
+        tr = _stored_track_record()
+        if tr.get("season") == season:
+            scores = {
+                (g["away"], g["home"]): (g["away_score"], g["home_score"])
+                for g in tr.get("games", [])
+                if g["week"] == week
+            }
     except HTTPException:
-        return {}
-    if tr.get("season") != season:
-        return {}
-    return {
-        (g["away"], g["home"]): (g["away_score"], g["home_score"])
-        for g in tr.get("games", [])
-        if g["week"] == week
-    }
+        pass
+    scores.update({
+        (away, home): final
+        for (s, w, away, home), final in _live_finals().items()
+        if s == season and w == week
+    })
+    return scores
 
 
 def _logged_picks(season: int, week: int) -> dict:
@@ -498,11 +631,7 @@ def _analyst_picks(season: int, week: int) -> dict:
 def _analyst_view(entry: dict, final: Optional[tuple]) -> dict:
     """What the slate shows of an analyst pick; graded at its own logged line."""
     view = {k: entry[k] for k in ("pick", "spread_home", "confidence", "reason", "flags", "sources", "logged_at")}
-    view["result"] = None
-    if final:
-        diff = final[1] - final[0] + entry["spread_home"]
-        covered = None if diff == 0 else entry["home"] if diff > 0 else entry["away"]
-        view["result"] = "push" if covered is None else "win" if covered == entry["pick"] else "loss"
+    view["result"] = _pick_result(entry, final) if final else None
     return view
 
 

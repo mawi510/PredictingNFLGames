@@ -2,11 +2,13 @@ name: Analyst Picks
 
 # Claude researches each game kicking off in the next 30 hours and logs a pick
 # (pipeline/analyst.py), then the track record is regraded so the site shows it.
-# The EC2 cron (infra/cron.d) dispatches this daily at 15:00 UTC. There is no
-# GitHub schedule: it runs hours late, and a late run would read Sunday night
-# games on Saturday evening instead of Sunday morning.
+# GitHub starts scheduled jobs 4 to 11 hours late, so 03:17 UTC means a run
+# between about 2am and 9am ET, before every kickoff that day. Each run logs the
+# games kicking off within 30 hours that are not logged yet.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * 9-12,1-2 *"
 
 permissions:
   contents: write
@@ -59,7 +61,9 @@ jobs:
           (while sleep 120; do fetch_token; done) &
           python -m pipeline.analyst
 
+      # The analyst step fails when any game gets no pick; keep the picks it made.
       - name: Commit the analyst log
+        if: ${{ !cancelled() }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -69,6 +73,7 @@ jobs:
           git push
 
       - name: Regrade season track record
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

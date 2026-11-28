@@ -8,8 +8,7 @@ name: Weekly NFL Data + Backtest
 # spreads update but before kickoff. (Old cron was "0 4 * * 4" = late Wed ET.)
 on:
   workflow_dispatch:
-  # The EC2 cron (infra/cron.d) dispatches this at 13:00 UTC Wednesday. GitHub's
-  # schedule below runs hours late and is only a backup.
+  # GitHub starts this 5 to 9 hours late, still well before Thursday's game.
   schedule:
     - cron: "0 13 * * 3"
 

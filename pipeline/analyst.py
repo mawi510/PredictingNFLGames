@@ -196,6 +196,7 @@ def main() -> None:
 
     client = anthropic.Anthropic()
     total = {"input_tokens": 0, "output_tokens": 0, "web_searches": 0}
+    failed = []
     for g in games:
         key = (int(g.week), g.away_team, g.home_team)
         prompt = game_prompt(g, model_log.get(key), now)
@@ -203,6 +204,7 @@ def main() -> None:
             pick, resp, sources, usage = read_game(client, prompt)
         except Exception as exc:  # one bad game must not lose the others' picks
             print(f"{g.away_team} at {g.home_team}: no pick ({exc})")
+            failed.append(f"{g.away_team} at {g.home_team}")
             continue
         for k in total:
             total[k] += usage[k]
@@ -226,6 +228,9 @@ def main() -> None:
             log_path(season).write_text(json.dumps(log, indent=1))  # after each game, so a crash keeps the rest
     print(f"Usage: {total['input_tokens']:,} input tokens, {total['output_tokens']:,} output tokens, "
           f"{total['web_searches']} web searches.")
+    if failed:
+        # Fail the job so a missing pick shows in GitHub; the workflow still commits the rest.
+        raise SystemExit(f"No pick for {len(failed)} of {len(games)} games: {', '.join(failed)}")
 
 
 if __name__ == "__main__":
