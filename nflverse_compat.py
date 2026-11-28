@@ -53,3 +53,14 @@ def import_weekly_data(years):
         df["dakota"] = np.nan
         frames.append(df)
     return pd.concat(frames, ignore_index=True)
+
+
+# nfl_data_py's import_schedules() reads a mirror (habitatring.com) that
+# began returning 404 on 2026-11-28. This is the source file it mirrored.
+_GAMES_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+
+
+def import_schedules(years):
+    """Drop-in for nfl_data_py.import_schedules(): every game of the given seasons."""
+    games = pd.read_csv(_GAMES_URL)
+    return games[games["season"].isin(list(years))]

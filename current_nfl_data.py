@@ -10,7 +10,7 @@ import nfl_data_py as nfl
 import boto3
 import os
 
-from nflverse_compat import import_weekly_data
+from nflverse_compat import import_schedules, import_weekly_data
 
 #We'll get actual performance data from nfl data py (Python vesion of nflfastR) 
 #Github repo: https://github.com/cooperdff/nfl_data_py
@@ -736,7 +736,7 @@ weekly_agg = weekly_agg.merge(qbr_agg, on=['season', 'week', 'team'], how='left'
 
 # # Game Info
 
-info = nfl.import_schedules(years)
+info = import_schedules(years)
 info = info[info['game_type'] == 'REG'].reset_index(drop=True)
 
 #Let's reduce this to only the games that have been played or are coming this week

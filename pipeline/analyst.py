@@ -97,9 +97,9 @@ def load_analyst_log(season: int) -> dict:
 
 def upcoming_games(season: int, now: pd.Timestamp) -> pd.DataFrame:
     """Regular-season games with a spread that kick off within the window."""
-    import nfl_data_py as nfl
+    from nflverse_compat import import_schedules
 
-    s = nfl.import_schedules([season])
+    s = import_schedules([season])
     s = s[(s["game_type"] == "REG") & s["home_score"].isna() & s["spread_line"].notna()].copy()
     for col in ("home_team", "away_team"):
         s[col] = s[col].replace(TEAM_ALIASES)

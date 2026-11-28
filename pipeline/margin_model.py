@@ -72,9 +72,9 @@ def load_schedule(seasons: Iterable[int]) -> pd.DataFrame:
     key = tuple(sorted({int(s) for s in seasons}))
     if key in _schedule_cache:
         return _schedule_cache[key]
-    import nfl_data_py as nfl
+    from nflverse_compat import import_schedules
 
-    sched = nfl.import_schedules(list(key))
+    sched = import_schedules(list(key))
     sched = sched[sched["game_type"] == "REG"]
     for col in ("home_team", "away_team"):
         sched[col] = sched[col].replace(TEAM_ALIASES)
