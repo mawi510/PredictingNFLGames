@@ -61,7 +61,9 @@ jobs:
           (while sleep 120; do fetch_token; done) &
           python -m pipeline.analyst
 
+      # The analyst step fails when any game gets no pick; keep the picks it made.
       - name: Commit the analyst log
+        if: ${{ !cancelled() }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -71,6 +73,7 @@ jobs:
           git push
 
       - name: Regrade season track record
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
