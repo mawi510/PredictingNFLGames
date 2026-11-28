@@ -46,12 +46,17 @@ GitHub's identity token through workload identity federation. One-time setup:
    identity > Connect workload > GitHub Actions. In the Federation rule step:
    - GitHub organization `mawi510`, repository `PredictingNFLGames`, branch
      `refs/heads/main`, organization numeric ID `117122865`.
-   - Allowed events: the job is started by workflow dispatch, so "Only push"
-     rejects it. Pick workflow_dispatch if the list has it. If not, open
-     Advanced match options (it then replaces the fields above) and set subject
-     pattern `repo:mawi510/PredictingNFLGames:ref:refs/heads/main`, plus claim
-     conditions `event_name` = `workflow_dispatch` and `repository_owner_id` =
-     `117122865`. Leave the audience blank.
+   - Allowed events: the job runs on its daily schedule (event `schedule`) and
+     by hand (event `workflow_dispatch`), so "Only push" rejects it. Open
+     Advanced match options (it then replaces the fields above) and set:
+     - Subject pattern `repo:mawi510/PredictingNFLGames:ref:refs/heads/main`,
+       with no `*`. This accepts runs on main only; fork pull requests have a
+       different subject, and only people who can push to the repo can start
+       a run on main.
+     - Claim condition `repository_owner_id` = `117122865`.
+     - No CEL condition. With one, the Console also requires a subject pattern
+       ending in `*`.
+     - Leave the audience blank.
    - Pick one workspace. Keep scope `workspace:developer` and the 10-minute
      token lifetime.
    - Target step: create a service account for the job.
@@ -100,38 +105,6 @@ sudo certbot --nginx -d api.promatchpredict.com
 
 Open the security group for inbound 80 + 443. Port 8000 stays closed — it's
 bound to 127.0.0.1 and only nginx reaches it.
-
-## Starting the scheduled jobs on time (on the running box)
-
-GitHub's cron starts our jobs 4 to 11 hours late (the 11:00 UTC results job ran
-between 14:46 and 22:17 UTC in Nov 2026). A cron entry on the box starts them on
-time through GitHub's workflow dispatch API instead. The GitHub schedules stay in
-the workflows as a backup; a second run of either job changes nothing.
-
-This runs on the instance that already serves the site and API. Nothing new is
-provisioned: the box already has `curl` and cron (the certbot renewal uses it).
-
-1. Create a fine-grained GitHub token: Settings > Developer settings > Fine-grained
-   tokens. Repository access: only `mawi510/PredictingNFLGames`. Permissions:
-   Actions, read and write. Nothing else.
-2. Open a shell on the box: AWS console > EC2 > Instances > select the instance >
-   Connect > EC2 Instance Connect, user `ec2-user`. Then paste:
-
-```bash
-mkdir -p ~/bin ~/.config/promatchpredict
-curl -fsSL https://raw.githubusercontent.com/mawi510/PredictingNFLGames/main/infra/dispatch-workflow.sh -o ~/bin/dispatch-workflow.sh
-chmod 700 ~/bin/dispatch-workflow.sh
-# Paste the token, then Enter, then Ctrl-D. It never appears in shell history.
-cat > ~/.config/promatchpredict/gh-dispatch-token
-chmod 600 ~/.config/promatchpredict/gh-dispatch-token
-# Test: this starts a results run now (Actions tab shows it within seconds).
-~/bin/dispatch-workflow.sh daily-results.yml
-sudo curl -fsSL https://raw.githubusercontent.com/mawi510/PredictingNFLGames/main/infra/cron.d/promatchpredict-dispatch -o /etc/cron.d/promatchpredict-dispatch
-sudo chmod 644 /etc/cron.d/promatchpredict-dispatch
-```
-
-Each dispatch appends a line to `~/dispatch.log`. Re-run the last `sudo curl`
-whenever `infra/cron.d/promatchpredict-dispatch` changes.
 
 ## Manual redeploy
 
