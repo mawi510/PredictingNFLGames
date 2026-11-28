@@ -38,6 +38,19 @@ export interface GameResult {
   pick_result: "win" | "loss" | "push";
 }
 
+// Claude's research pick for a game (pipeline/analyst.py), logged before
+// kickoff and graded at its own line, which can differ from the model's.
+export interface AnalystPick {
+  pick: string;
+  spread_home: number;
+  confidence: number; // 1 = coin flip, 5 = strongest edge
+  reason: string;
+  flags: string[];
+  sources: string[];
+  logged_at: string;
+  result: "win" | "loss" | "push" | null;
+}
+
 export interface SlateGame {
   away: string;
   home: string;
@@ -53,6 +66,7 @@ export interface SlateGame {
   p_pick: number;
   edge_pts: number;
   result?: GameResult | null;
+  analyst?: AnalystPick | null;
   // The model version that made this pick. Differs from the slate's
   // model_version only in the week a new model is deployed; the row then
   // carries that model's own line parameters.
@@ -120,6 +134,14 @@ export interface TrackRecord {
   weekly: WeeklyResult[];
   calibration?: CalibrationBin[];
   brier?: number;
+  analyst?: AnalystRecord | null;
+}
+
+export interface AnalystRecord {
+  from_week: number;
+  record: RecordSummary;
+  // The model's record on the same games, so the two compare on equal terms.
+  model_same_games: RecordSummary;
 }
 
 export interface MetricMeta {

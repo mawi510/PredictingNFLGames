@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { SlateGame } from "@/lib/api";
 import { formatKickoffTime, formatSpread } from "@/lib/format";
 import { teamLogo, teamName } from "@/lib/teams";
+import { AnalystRead, AnalystTag } from "./AnalystRead";
 import CoverProbability from "./CoverProbability";
 import LinePanel from "./LinePanel";
 import PickBadge from "./PickBadge";
@@ -91,6 +92,7 @@ export default function MatchupRow({
               result={r?.pick_result}
             />
           )}
+          {showPicks && <AnalystTag game={game} />}
         </div>
 
         <div className="num hidden whitespace-nowrap text-right font-mono text-[13px] text-fg-2 lg:block">
@@ -99,6 +101,7 @@ export default function MatchupRow({
       </div>
 
       {open && lineModel && <LinePanel game={game} scale={lineModel.scale} nu={lineModel.nu} />}
+      {open && <AnalystRead game={game} />}
     </div>
   );
 }

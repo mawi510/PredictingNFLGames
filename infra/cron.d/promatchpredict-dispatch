@@ -11,3 +11,7 @@ LOG=/home/ec2-user/dispatch.log
 
 # Wednesday data refresh and pick logging, after nflverse posts the week's spreads.
 0 13 * 9-12,1-2 3 ec2-user /home/ec2-user/bin/dispatch-workflow.sh weekly-data.yml >> $LOG 2>&1
+
+# Analyst picks for games kicking off in the next 30 hours: 15:00 UTC is 10am EST,
+# after Friday's final injury report for Saturday and Sunday games.
+0 15 * 9-12,1-2 * ec2-user /home/ec2-user/bin/dispatch-workflow.sh analyst-picks.yml >> $LOG 2>&1
