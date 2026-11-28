@@ -101,17 +101,21 @@ sudo certbot --nginx -d api.promatchpredict.com
 Open the security group for inbound 80 + 443. Port 8000 stays closed — it's
 bound to 127.0.0.1 and only nginx reaches it.
 
-## Starting the scheduled jobs on time
+## Starting the scheduled jobs on time (on the running box)
 
 GitHub's cron starts our jobs 4 to 11 hours late (the 11:00 UTC results job ran
 between 14:46 and 22:17 UTC in Nov 2026). A cron entry on the box starts them on
 time through GitHub's workflow dispatch API instead. The GitHub schedules stay in
 the workflows as a backup; a second run of either job changes nothing.
 
+This runs on the instance that already serves the site and API. Nothing new is
+provisioned: the box already has `curl` and cron (the certbot renewal uses it).
+
 1. Create a fine-grained GitHub token: Settings > Developer settings > Fine-grained
    tokens. Repository access: only `mawi510/PredictingNFLGames`. Permissions:
    Actions, read and write. Nothing else.
-2. On the box, as `ec2-user`:
+2. Open a shell on the box: AWS console > EC2 > Instances > select the instance >
+   Connect > EC2 Instance Connect, user `ec2-user`. Then paste:
 
 ```bash
 mkdir -p ~/bin ~/.config/promatchpredict
